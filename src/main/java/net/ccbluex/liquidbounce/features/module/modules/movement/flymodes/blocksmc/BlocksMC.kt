@@ -8,14 +8,14 @@ package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.block
 import net.ccbluex.liquidbounce.event.Listenable
 import net.ccbluex.liquidbounce.event.WorldEvent
 import net.ccbluex.liquidbounce.event.handler
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.boostSpeed
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.debugFly
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.extraBoost
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.stable
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.stopOnLanding
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.stopOnNoMove
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.timerSlowed
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.boostSpeed
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.debugFly
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.extraBoost
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.stable
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.stopOnLanding
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.stopOnNoMove
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.timerSlowed
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPackets
 import net.ccbluex.liquidbounce.utils.client.chat
@@ -28,7 +28,7 @@ import net.minecraft.network.play.client.C03PacketPlayer.C04PacketPlayerPosition
 import net.minecraft.world.World
 
 /**
- * Fly concept originally taken from CrossSine:
+ * Flight concept originally taken from CrossSine:
  * https://github.com/shxp3/CrossSine/blob/main/src/main/java/net/ccbluex/liquidbounce/features/module/modules/movement/flights/ncp/LatestNCP.java
  *
  * Modified by @Eclipses and mixed with code from NextGen:
@@ -39,7 +39,7 @@ import net.minecraft.world.World
  *
  * Additionally, ensure that you avoid flight before you got flagged or
  * (S08 Packet) teleported, as this will flag u more, or you can wait till
- * you get the Fly message Line(153). Also avoid flying too many times (At long distance).
+ * you get the Flight message Line(153). Also avoid flying too many times (At long distance).
  *
  * @author EclipsesDev
  */
@@ -57,14 +57,14 @@ object BlocksMC : FlyMode("BlocksMC"), Listenable {
         if (isFlying) {
             if (player.onGround && stopOnLanding) {
                 if (debugFly)
-                    chat("Ground Detected.. Stopping Fly")
-                Fly.state = false
+                    chat("Ground Detected.. Stopping Flight")
+                Flight.state = false
             }
 
             if (!player.isMoving && stopOnNoMove) {
                 if (debugFly)
-                    chat("No Movement Detected.. Stopping Fly. (Could be flagged)")
-                Fly.state = false
+                    chat("No Movement Detected.. Stopping Flight. (Could be flagged)")
+                Flight.state = false
             }
         }
 
@@ -95,7 +95,7 @@ object BlocksMC : FlyMode("BlocksMC"), Listenable {
     }
 
     val onWorld = handler<WorldEvent> {
-        Fly.state = false
+        Flight.state = false
     }
 
     private fun handleTimerSlow(player: EntityPlayerSP) {
@@ -157,7 +157,7 @@ object BlocksMC : FlyMode("BlocksMC"), Listenable {
 
             isTeleported = true
             if (debugFly)
-                chat("Teleported.. Fly Now!")
+                chat("Teleported.. Flight Now!")
         }
     }
 }

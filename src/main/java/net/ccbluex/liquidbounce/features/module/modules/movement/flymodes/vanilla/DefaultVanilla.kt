@@ -8,14 +8,14 @@ package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.vanil
 
 import net.ccbluex.liquidbounce.event.MoveEvent
 import net.ccbluex.liquidbounce.event.PacketEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.kickBypassModeValue
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.kickBypassMotionSpeedValue
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.kickBypassValue
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.noClipValue
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.smoothValue
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.speedValue
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.spoofValue
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.vspeedValue
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.kickBypassModeValue
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.kickBypassMotionSpeedValue
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.kickBypassValue
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.noClipValue
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.smoothValue
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.speedValue
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.spoofValue
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.vspeedValue
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils.resetMotion

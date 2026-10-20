@@ -6,14 +6,14 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.blocksmc
 
 import net.ccbluex.liquidbounce.event.*
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.boostSpeed
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.debugFly
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.extraBoost
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.stable
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.stopOnLanding
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.stopOnNoMove
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.timerSlowed
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.boostSpeed
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.debugFly
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.extraBoost
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.stable
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.stopOnLanding
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.stopOnNoMove
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.timerSlowed
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.client.PacketUtils
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPackets
@@ -32,7 +32,7 @@ import net.minecraft.network.status.client.C01PacketPing
 import net.minecraft.world.World
 
 /**
- * Implements a flying method similar to BlocksMC Fly mode, but instead of clipping,
+ * Implements a flying method similar to BlocksMC Flight mode, but instead of clipping,
  * it lags (blinks) the player instead.
  *
  * Note:
@@ -58,14 +58,14 @@ object BlocksMC2 : FlyMode("BlocksMC2"), Listenable {
         if (isFlying) {
             if (player.onGround && stopOnLanding) {
                 if (debugFly)
-                    chat("Ground Detected.. Stopping Fly")
-                Fly.state = false
+                    chat("Ground Detected.. Stopping Flight")
+                Flight.state = false
             }
 
             if (!player.isMoving && stopOnNoMove) {
                 if (debugFly)
-                    chat("No Movement Detected.. Stopping Fly. (Could be flagged)")
-                Fly.state = false
+                    chat("No Movement Detected.. Stopping Flight. (Could be flagged)")
+                Flight.state = false
             }
         }
 
@@ -100,7 +100,7 @@ object BlocksMC2 : FlyMode("BlocksMC2"), Listenable {
     }
 
     val onWorld = handler<WorldEvent> { event ->
-        Fly.state = false
+        Flight.state = false
 
         // Clear packets on disconnect
         if (event.worldClient == null) {

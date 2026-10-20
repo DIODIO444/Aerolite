@@ -5,7 +5,7 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.spartan
 
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.vanillaSpeed
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.vanillaSpeed
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils.strafe
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket

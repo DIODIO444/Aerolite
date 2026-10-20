@@ -6,7 +6,7 @@ import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.features.module.ModuleCategory
 import net.ccbluex.liquidbounce.features.module.ModuleInfo
 import net.ccbluex.liquidbounce.features.module.modules.combat.KillAura
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
 import net.ccbluex.liquidbounce.features.module.modules.movement.NewTargetStrafe
 import net.ccbluex.liquidbounce.features.module.modules.movement.Speed
 import net.ccbluex.liquidbounce.ui.client.hud.element.elements.Notification
@@ -322,7 +322,7 @@ class HypDisabler : Module(){
     fun onMotion(event: MotionEvent) {
         val killAura = LiquidBounce.moduleManager.getModule(KillAura::class.java)!! as KillAura
         val speed = LiquidBounce.moduleManager.getModule(Speed::class.java)!! as Speed
-        val fly = LiquidBounce.moduleManager.getModule(Fly::class.java)!! as Fly
+        val fly = LiquidBounce.moduleManager.getModule(Flight::class.java)!! as Flight
         val targetStrafe = LiquidBounce.moduleManager.getModule(NewTargetStrafe::class.java)!! as NewTargetStrafe
 
         if (event.eventState == EventState.PRE)

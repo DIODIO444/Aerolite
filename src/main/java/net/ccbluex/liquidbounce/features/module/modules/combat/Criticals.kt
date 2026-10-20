@@ -12,7 +12,7 @@ import net.ccbluex.liquidbounce.event.PacketEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPackets
 import net.ccbluex.liquidbounce.utils.client.AnticheatModeAdvisor
 import net.ccbluex.liquidbounce.utils.client.ModeRisk
@@ -77,7 +77,7 @@ object Criticals : Module("Criticals", Category.COMBAT, Category.SubCategory.COM
 
             if (!thePlayer.onGround || thePlayer.isOnLadder || thePlayer.isInWeb || thePlayer.isInLiquid ||
                 thePlayer.ridingEntity != null || entity.hurtTime > hurtTime ||
-                Fly.handleEvents() || !msTimer.hasTimePassed(delay) ||
+                Flight.handleEvents() || !msTimer.hasTimePassed(delay) ||
                 (onlyWhileSprinting && !thePlayer.isSprinting)
             )
                 return@handler

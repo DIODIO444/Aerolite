@@ -6,7 +6,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.other
 
 import net.ccbluex.liquidbounce.event.BlockBBEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.jumpY
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.jumpY
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.extensions.tryJump
 import net.minecraft.block.BlockLadder

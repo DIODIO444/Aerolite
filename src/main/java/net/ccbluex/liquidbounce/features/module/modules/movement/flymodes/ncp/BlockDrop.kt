@@ -1,8 +1,8 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.ncp
 
 import net.ccbluex.liquidbounce.event.PacketEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.blockDropHorizontalSpeed
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.blockDropVerticalSpeed
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.blockDropHorizontalSpeed
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.blockDropVerticalSpeed
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils

@@ -6,7 +6,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.ncp
 
 import net.ccbluex.liquidbounce.event.PacketEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.ncpMotion
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.ncpMotion
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils.strafe
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket

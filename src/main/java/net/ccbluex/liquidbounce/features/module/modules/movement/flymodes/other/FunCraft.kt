@@ -4,7 +4,7 @@ import net.ccbluex.liquidbounce.event.BlockBBEvent
 import net.ccbluex.liquidbounce.event.JumpEvent
 import net.ccbluex.liquidbounce.event.PacketEvent
 import net.ccbluex.liquidbounce.event.StepEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.funCraftTimer
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.funCraftTimer
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.timing.TickTimer
 import net.minecraft.block.BlockAir

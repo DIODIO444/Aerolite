@@ -7,9 +7,9 @@ package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.other
 
 import net.ccbluex.liquidbounce.event.EventState
 import net.ccbluex.liquidbounce.event.MotionEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.autoFireball
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.options
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.autoFireball
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.options
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.block.center
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
@@ -48,25 +48,25 @@ object Fireball : FlyMode("Fireball") {
             return
 
         val customRotation = Rotation(
-            if (Fly.invertYaw) RotationUtils.invertYaw(player.rotationYaw) else player.rotationYaw,
-            Fly.rotationPitch
+            if (Flight.invertYaw) RotationUtils.invertYaw(player.rotationYaw) else player.rotationYaw,
+            Flight.rotationPitch
         )
 
         if (player.onGround && !mc.theWorld.isAirBlock(BlockPos(player.posX, player.posY - 1, player.posZ))) {
-            Fly.firePosition = BlockPos(player.posX, player.posY - 1, player.posZ)
+            Flight.firePosition = BlockPos(player.posX, player.posY - 1, player.posZ)
         }
 
-        val smartRotation = Fly.firePosition?.center?.let { RotationUtils.toRotation(it, false, player) }
-        val rotation = if (Fly.pitchMode == "Custom") customRotation else smartRotation
+        val smartRotation = Flight.firePosition?.center?.let { RotationUtils.toRotation(it, false, player) }
+        val rotation = if (Flight.pitchMode == "Custom") customRotation else smartRotation
 
         if (options.rotationsActive && rotation != null) {
             RotationUtils.setTargetRotation(rotation, options, if (options.keepRotation) options.resetTicks else 1)
         }
 
-        if (Fly.fireBallThrowMode == "Edge" && !player.isNearEdge(Fly.edgeThreshold))
+        if (Flight.fireBallThrowMode == "Edge" && !player.isNearEdge(Flight.edgeThreshold))
             return
 
-        if (Fly.autoJump && player.onGround && !Fly.wasFired) {
+        if (Flight.autoJump && player.onGround && !Flight.wasFired) {
             player.tryJump()
         }
     }
@@ -78,23 +78,23 @@ object Fireball : FlyMode("Fireball") {
 
         val fireBall = player.hotBarSlot(fireballSlot).stack
 
-        if (Fly.fireBallThrowMode == "Edge" && !player.isNearEdge(Fly.edgeThreshold))
+        if (Flight.fireBallThrowMode == "Edge" && !player.isNearEdge(Flight.edgeThreshold))
             return
 
-        if (Fly.wasFired) {
+        if (Flight.wasFired) {
             return
         }
 
         if (player.isMoving) {
-            Fly.nextTick {
-                if (Fly.swing) player.swingItem() else sendPacket(C0APacketAnimation())
+            Flight.nextTick {
+                if (Flight.swing) player.swingItem() else sendPacket(C0APacketAnimation())
 
                 // NOTE: You may increase max try to `2` if fireball doesn't work. (Ex: BlocksMC)
-                repeat(Fly.fireballTry) {
+                repeat(Flight.fireballTry) {
                     player.sendUseItem(fireBall)
                 }
 
-                Fly.nextTick {
+                Flight.nextTick {
                     if (autoFireball != "Off") {
                         SilentHotbar.selectSlotSilently(
                             this,
@@ -105,7 +105,7 @@ object Fireball : FlyMode("Fireball") {
                         )
                     }
 
-                    Fly.wasFired = true
+                    Flight.wasFired = true
                 }
             }
         }

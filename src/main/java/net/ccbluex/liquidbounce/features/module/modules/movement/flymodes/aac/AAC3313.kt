@@ -5,7 +5,7 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.aac
 
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.aacMotion2
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.aacMotion2
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import org.lwjgl.input.Keyboard
 

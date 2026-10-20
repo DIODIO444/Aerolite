@@ -247,7 +247,7 @@ object Step : Module("Step", Category.MOVEMENT, Category.SubCategory.MOVEMENT_MA
         }
 
         // Some fly modes should disable step
-        if (Fly.handleEvents() && Fly.mode in arrayOf(
+        if (Flight.handleEvents() && Flight.mode in arrayOf(
                 "Hypixel",
                 "OtherHypixel",
                 "LatestHypixel",

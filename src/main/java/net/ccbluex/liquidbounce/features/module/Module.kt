@@ -330,7 +330,7 @@ open class Module() :MinecraftInstance(), Listenable, Configurable {
             top.forEach(::markGroup)
             val rows = top.filter { it is Configurable || !grouped.containsKey(it) }
 
-            // Modules such as Fly/Speed/LongJump expose extra values by overriding [values]
+            // Modules such as Flight/Speed/LongJump expose extra values by overriding [values]
             // (mode specific settings). Keep those visible in the tree as well.
             val dynamic = values.filter { candidate ->
                 rows.none { it === candidate } && !grouped.containsKey(candidate)

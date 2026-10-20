@@ -7,11 +7,11 @@ package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.verus
 
 import net.ccbluex.liquidbounce.event.JumpEvent
 import net.ccbluex.liquidbounce.event.PacketEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.boostMotion
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.boostTicksValue
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.damage
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.timerSlow
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.yBoost
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.boostMotion
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.boostTicksValue
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.damage
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.timerSlow
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.yBoost
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils.strafe
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
@@ -25,8 +25,8 @@ import net.minecraft.network.play.client.C03PacketPlayer.C06PacketPlayerPosLook
  * Modified code ported from VerusDamage Script by Arcane
  *
  * Note:
- * - Getting below block (Like NCPLatest Fly Method), should help to temporarily bypass Speed(A) Checks
- * - Turning off Damage should bypass Fly(G) Checks
+ * - Getting below block (Like NCPLatest Flight Method), should help to temporarily bypass Speed(A) Checks
+ * - Turning off Damage should bypass Flight(G) Checks
  */
 object Verus : FlyMode("Verus") {
     private var boostTicks = 0

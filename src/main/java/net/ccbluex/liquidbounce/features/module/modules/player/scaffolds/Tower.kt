@@ -7,7 +7,7 @@ package net.ccbluex.liquidbounce.features.module.modules.player.scaffolds
 
 import net.ccbluex.liquidbounce.config.*
 import net.ccbluex.liquidbounce.event.*
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
 import net.ccbluex.liquidbounce.features.module.modules.movement.Speed
 import net.ccbluex.liquidbounce.features.module.modules.player.scaffolds.Scaffold.searchMode
 import net.ccbluex.liquidbounce.features.module.modules.player.scaffolds.Scaffold.shouldGoDown
@@ -151,7 +151,7 @@ object Tower : ConfigurableImpl("Tower"), MinecraftInstance, Listenable {
                 return@handler
             if (notOnMoveValues.get() && player.isMoving)
                 return@handler
-            if (Speed.state || Fly.state)
+            if (Speed.state || Flight.state)
                 return@handler
 
             event.cancelEvent()
@@ -310,7 +310,7 @@ object Tower : ConfigurableImpl("Tower"), MinecraftInstance, Listenable {
             // Credit: @localpthebest
             "vulcan2.9.0" -> {
                 if (player.ticksExisted % 10 == 0) {
-                    // Prevent Fly Flag
+                    // Prevent Flight Flag
                     player.motionY = -0.1
                     return
                 }

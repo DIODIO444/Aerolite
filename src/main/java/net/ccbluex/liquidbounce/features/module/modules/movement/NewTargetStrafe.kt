@@ -42,7 +42,7 @@ class NewTargetStrafe : Module() {
     private val expMode = BoolValue("ExperimentalSpeed", false)
     private lateinit var aura: KillAura
     private lateinit var speed: Speed
-    private lateinit var fly: Fly
+    private lateinit var fly: Flight
     //
 
     var direction: Int = 1
@@ -52,7 +52,7 @@ class NewTargetStrafe : Module() {
     override fun onInitialize() {
         aura = LiquidBounce.moduleManager.getModule(KillAura::class.java) as KillAura
         speed = LiquidBounce.moduleManager.getModule(Speed::class.java) as Speed
-        fly = LiquidBounce.moduleManager.getModule(Fly::class.java) as Fly
+        fly = LiquidBounce.moduleManager.getModule(Flight::class.java) as Flight
     }
 
     override fun onEnable() {

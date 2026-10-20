@@ -39,10 +39,6 @@ import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.vulcan
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.grim.GrimFly
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.polar.PolarFly
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.sentinel.SentinelFly
-import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
-import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.LegacyFlyModeAdapter
-import net.ccbluex.liquidbounce.features.module.modules.movement.flys.FlyMode as LegacyFlyMode
-import net.ccbluex.liquidbounce.utils.ClassUtils
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
 import net.ccbluex.liquidbounce.utils.rotation.RotationPriority
 import net.ccbluex.liquidbounce.utils.rotation.RotationSettings
@@ -59,10 +55,9 @@ import net.ccbluex.liquidbounce.config.boolean
 import net.ccbluex.liquidbounce.config.choices
 import net.ccbluex.liquidbounce.config.float
 import net.ccbluex.liquidbounce.config.int
-import net.ccbluex.liquidbounce.value.Value
 
-object Fly : Module("Fly", Category.MOVEMENT, Category.SubCategory.MOVEMENT_MAIN, Keyboard.KEY_F) {
-    private val newFlyModes = arrayOf(
+object Flight : Module("Flight", Category.MOVEMENT, Category.SubCategory.MOVEMENT_MAIN, Keyboard.KEY_F) {
+    private val flyModes = arrayOf(
         Vanilla, SmoothVanilla, DefaultVanilla, Creative,
 
         // NCP
@@ -104,19 +99,6 @@ object Fly : Module("Fly", Category.MOVEMENT, Category.SubCategory.MOVEMENT_MAIN
         // Other
         Jetpack, KeepAlive, Collide, Jump, Flag, Fireball, Clip, FakeGround, FunCraft, TeleportRewinside
     )
-
-    /**
-     * Fly modes ported from the old Aerolite framework (`movement.flys`), adapted to [FlyMode].
-     * Modes whose name already exists in the new set are skipped, so the new implementation wins.
-     */
-    private val legacyFlyModes: List<LegacyFlyModeAdapter> = ClassUtils
-        .resolvePackage("${this.javaClass.`package`.name}.flys", LegacyFlyMode::class.java)
-        .map { LegacyFlyModeAdapter(it.newInstance() as LegacyFlyMode) }
-        .sortedBy { it.modeName }
-
-    private val flyModes: Array<FlyMode> = newFlyModes + legacyFlyModes.filter { legacy ->
-        newFlyModes.none { it.modeName.equals(legacy.modeName, ignoreCase = true) }
-    }
 
     /**
      * Old/Deprecated Modes
@@ -384,16 +366,6 @@ object Fly : Module("Fly", Category.MOVEMENT, Category.SubCategory.MOVEMENT_MAIN
             blocksMcGroup, fireballGroup, serversGroup, renderGroup,
         ))
     }
-    var launchX = 0.0
-    var launchY = 0.0
-    var launchZ = 0.0
-    var launchYaw = 0f
-    var launchPitch = 0f
-
-    /** Legacy fly modes rely on these two flags. */
-    var antiDesync = false
-    var needReset = true
-
     var wasFired = false
     var firePosition: BlockPos? = null
 
@@ -412,14 +384,6 @@ object Fly : Module("Fly", Category.MOVEMENT, Category.SubCategory.MOVEMENT_MAIN
         jumpY = thePlayer.posY
         wasFlying = mc.thePlayer.capabilities.isFlying
 
-        antiDesync = false
-        needReset = true
-        launchX = thePlayer.posX
-        launchY = thePlayer.posY
-        launchZ = thePlayer.posZ
-        launchYaw = thePlayer.rotationYaw
-        launchPitch = thePlayer.rotationPitch
-
         modeModule.onEnable()
     }
 
@@ -432,7 +396,6 @@ object Fly : Module("Fly", Category.MOVEMENT, Category.SubCategory.MOVEMENT_MAIN
             else thePlayer.stop()
         }
 
-        antiDesync = false
         wasFired = false
         firePosition = null
         thePlayer?.capabilities?.isFlying = wasFlying
@@ -498,33 +461,6 @@ object Fly : Module("Fly", Category.MOVEMENT, Category.SubCategory.MOVEMENT_MAIN
     val onMove = handler<MoveEvent> { event ->
         modeModule.onMove(event)
     }
-
-    /**
-     * Legacy fly modes still react to strafe and teleport events; the new [FlyMode] API dropped them.
-     */
-    val onStrafe = handler<StrafeEvent> { event ->
-        (modeModule as? LegacyFlyModeAdapter)?.dispatchStrafe(event)
-    }
-
-    val onTeleport = handler<TeleportEvent> { event ->
-        (modeModule as? LegacyFlyModeAdapter)?.dispatchTeleport(event)
-    }
-
-    /**
-     * Module settings plus every legacy mode's own settings, shown only while that mode is active.
-     */
-    override val values: List<Value<*>>
-        get() {
-            val result = super.values.toMutableList()
-
-            for (adapter in legacyFlyModes) {
-                for (value in adapter.values) {
-                    result.add(value.displayable { mode.equals(adapter.modeName, ignoreCase = true) })
-                }
-            }
-
-            return result
-        }
 
     fun handleVanillaKickBypass() {
         if (!vanillaKickBypass || !groundTimer.hasTimePassed(1000)) return

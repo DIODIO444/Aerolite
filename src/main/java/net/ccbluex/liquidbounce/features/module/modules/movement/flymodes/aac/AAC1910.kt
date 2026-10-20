@@ -6,9 +6,9 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.aac
 
 import net.ccbluex.liquidbounce.event.Render3DEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.onRender3D
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.aacSpeed
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.startY
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.onRender3D
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.aacSpeed
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.startY
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils.strafe

@@ -9,9 +9,9 @@ import net.ccbluex.liquidbounce.event.BlockBBEvent
 import net.ccbluex.liquidbounce.event.JumpEvent
 import net.ccbluex.liquidbounce.event.PacketEvent
 import net.ccbluex.liquidbounce.event.StepEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.hypixelBoost
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.hypixelBoostDelay
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.hypixelBoostTimer
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.hypixelBoost
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.hypixelBoostDelay
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.hypixelBoostTimer
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.timing.MSTimer
 import net.ccbluex.liquidbounce.utils.timing.TickTimer

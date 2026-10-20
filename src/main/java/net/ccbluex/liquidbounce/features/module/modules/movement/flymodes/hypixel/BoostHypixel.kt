@@ -6,7 +6,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.hypixel
 
 import net.ccbluex.liquidbounce.event.*
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils.direction
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
@@ -129,7 +129,7 @@ object BoostHypixel : FlyMode("BoostHypixel") {
 	override fun onPacket(event: PacketEvent) {
 		when (val packet = event.packet) {
 			is S08PacketPlayerPosLook -> {
-				Fly.state = false
+				Flight.state = false
 				chat("§8[§c§lBoostHypixel-§a§lFly§8] §cSetback detected.")
 			}
 			is C03PacketPlayer -> packet.onGround = false

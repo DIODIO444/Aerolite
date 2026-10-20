@@ -11,7 +11,7 @@ import net.ccbluex.liquidbounce.event.*
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.features.module.modules.combat.Backtrack.runWithSimulatedPosition
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
 import net.ccbluex.liquidbounce.features.module.modules.player.Blink
 import net.ccbluex.liquidbounce.features.module.modules.world.Fucker
 import net.ccbluex.liquidbounce.features.module.modules.other.Nuker
@@ -195,7 +195,7 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
     private val noScaffold by boolean("NoScaffold", false)
         .describe("Disable the aura while Scaffold is on.")
     private val noFly by boolean("NoFly", false)
-        .describe("Disable the aura while Fly is on.")
+        .describe("Disable the aura while Flight is on.")
     private val noEat by boolean("NoEat", false)
         .describe("Disable the aura while eating or drinking.")
     private val noBlocking by boolean("NoBlocking", false)
@@ -1592,7 +1592,7 @@ private fun updateHittable() {
     private fun shouldCancelDueToModuleState(): Boolean {
         return (blinkCheck && FDPClient.moduleManager[Blink::class.java.simpleName]?.state == true)
                 || (noScaffold && FDPClient.moduleManager[Scaffold::class.java.simpleName]?.state == true)
-                || (noFly && FDPClient.moduleManager[Fly::class.java.simpleName]?.state == true)
+                || (noFly && FDPClient.moduleManager[Flight::class.java.simpleName]?.state == true)
                 || (onSwording && mc.thePlayer.heldItem?.item !is ItemSword)
     }
 

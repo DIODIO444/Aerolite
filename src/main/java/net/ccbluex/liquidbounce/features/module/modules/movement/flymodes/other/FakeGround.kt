@@ -2,9 +2,9 @@ package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.other
 
 import net.ccbluex.liquidbounce.event.BlockBBEvent
 import net.ccbluex.liquidbounce.event.JumpEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.fakeGroundJumpUpY
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.fakeGroundNoJump
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.jumpY
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.fakeGroundJumpUpY
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.fakeGroundNoJump
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.jumpY
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.minecraft.block.BlockAir
 import net.minecraft.util.AxisAlignedBB

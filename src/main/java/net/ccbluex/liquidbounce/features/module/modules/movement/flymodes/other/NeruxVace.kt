@@ -5,7 +5,7 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.other
 
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly.neruxVaceTicks
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight.neruxVaceTicks
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 
 object NeruxVace : FlyMode("NeruxVace") {

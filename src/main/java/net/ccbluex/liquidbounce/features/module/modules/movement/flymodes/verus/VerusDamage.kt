@@ -10,7 +10,7 @@ import net.ccbluex.liquidbounce.event.JumpEvent
 import net.ccbluex.liquidbounce.event.MotionEvent
 import net.ccbluex.liquidbounce.event.MoveEvent
 import net.ccbluex.liquidbounce.event.PacketEvent
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
 import net.ccbluex.liquidbounce.features.module.modules.movement.flymodes.FlyMode
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils.strafe
@@ -36,7 +36,7 @@ object VerusDamage : FlyMode("VerusDamage") {
     override fun onMove(event: MoveEvent) {
         val player = mc.thePlayer ?: return
 
-        when (Fly.verusDamageBoostMode) {
+        when (Flight.verusDamageBoostMode) {
             "Boost1" -> {
                 val pos = player.position.add(0.0, -1.5, 0.0)
                 sendPacket(
@@ -63,7 +63,7 @@ object VerusDamage : FlyMode("VerusDamage") {
                     mc.timer.timerSpeed = 0.8f
                     player.motionX = 0.0
                     player.motionZ = 0.0
-                    strafe(Fly.verusDamageSpeed)
+                    strafe(Flight.verusDamageSpeed)
                 } else {
                     strafe(0.29F)
                 }
@@ -102,7 +102,7 @@ object VerusDamage : FlyMode("VerusDamage") {
                     player.motionY += 0.4
                     event.y = player.motionY
                     mc.timer.timerSpeed = 1.0f
-                    strafe(Fly.verusDamageSpeed)
+                    strafe(Flight.verusDamageSpeed)
                 }
 
                 if (player.hurtTime == 3) {
@@ -122,7 +122,7 @@ object VerusDamage : FlyMode("VerusDamage") {
     override fun onUpdate() {
         val player = mc.thePlayer ?: return
 
-        if (Fly.verusDamageBoostMode != "Boost3") {
+        if (Flight.verusDamageBoostMode != "Boost3") {
             return
         }
 
@@ -154,13 +154,13 @@ object VerusDamage : FlyMode("VerusDamage") {
         }
 
         if (ticks2 < 25) {
-            strafe(Fly.verusDamageSpeed)
+            strafe(Flight.verusDamageSpeed)
         } else {
             if (ticks2 == 25) {
                 strafe(0.48f)
             }
 
-            if (Fly.verusDamageReDamage) {
+            if (Flight.verusDamageReDamage) {
                 ticks2 = 1
             }
 
@@ -173,7 +173,7 @@ object VerusDamage : FlyMode("VerusDamage") {
     override fun onPacket(event: PacketEvent) {
         val packet = event.packet
 
-        if (Fly.verusDamageBoostMode in arrayOf("Boost1", "Boost2") && packet is C03PacketPlayer && ticks < 3) {
+        if (Flight.verusDamageBoostMode in arrayOf("Boost1", "Boost2") && packet is C03PacketPlayer && ticks < 3) {
             packet.onGround = true
         }
     }
@@ -185,7 +185,7 @@ object VerusDamage : FlyMode("VerusDamage") {
             return
         }
 
-        when (Fly.verusDamageBoostMode) {
+        when (Flight.verusDamageBoostMode) {
             "Boost1" -> {
                 ticks++
 
@@ -205,7 +205,7 @@ object VerusDamage : FlyMode("VerusDamage") {
     }
 
     override fun onJump(event: JumpEvent) {
-        if (Fly.verusDamageBoostMode == "Boost1") {
+        if (Flight.verusDamageBoostMode == "Boost1") {
             event.cancelEvent()
         }
     }

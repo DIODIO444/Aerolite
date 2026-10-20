@@ -6,7 +6,7 @@ import net.ccbluex.liquidbounce.event.PacketEvent
 import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.features.module.ModuleCategory
 import net.ccbluex.liquidbounce.features.module.ModuleInfo
-import net.ccbluex.liquidbounce.features.module.modules.movement.Fly
+import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
 import net.ccbluex.liquidbounce.features.module.modules.world.BlockFly
 import net.ccbluex.liquidbounce.utils.MovementUtils
 import net.ccbluex.liquidbounce.utils.PacketUtils
@@ -33,7 +33,7 @@ class FluxAntiVoid : Module() {
     }
     @EventTarget
     fun onPacket(e: PacketEvent) {
-        if (!LiquidBounce.moduleManager.get(Fly::class.java)!!.state && !LiquidBounce.moduleManager[BlockFly::class.java]!!.state) {
+        if (!LiquidBounce.moduleManager.get(Flight::class.java)!!.state && !LiquidBounce.moduleManager[BlockFly::class.java]!!.state) {
             if (!packets.isEmpty() && mc.thePlayer.ticksExisted < 100) packets.clear()
             if (e.packet is C03PacketPlayer) {
                 if (isInVoid()) {
