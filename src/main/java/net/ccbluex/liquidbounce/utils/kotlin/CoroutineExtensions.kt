@@ -1,0 +1,50 @@
+/*
+ * FDPClient Hacked Client
+ * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge.
+ * https://github.com/SkidderMC/FDPClient/
+ */
+package net.ccbluex.liquidbounce.utils.kotlin
+
+import kotlinx.coroutines.*
+import net.ccbluex.liquidbounce.utils.client.ClientUtils.LOGGER
+import net.minecraft.client.Minecraft
+import net.minecraft.util.IThreadListener
+import kotlin.coroutines.CoroutineContext
+
+val clientCoroutineExceptionHandler = CoroutineExceptionHandler { context, throwable ->
+    LOGGER.error("Unhandled client coroutine exception in $context", throwable)
+}
+
+object SharedScopes {
+
+    @JvmField
+    val Default = CoroutineScope(Dispatchers.Default + SupervisorJob() + clientCoroutineExceptionHandler)
+
+    @JvmField
+    val IO = CoroutineScope(Dispatchers.IO + SupervisorJob() + clientCoroutineExceptionHandler)
+
+    fun stop() {
+        Default.cancel()
+        IO.cancel()
+    }
+}
+
+/**
+ * To dispatch tasks on Client thread (Render thread)
+ * @author opZywl
+ */
+private object RenderDispatcher : CoroutineDispatcher() {
+    val mc: IThreadListener = Minecraft.getMinecraft()
+
+    override fun dispatch(context: CoroutineContext, block: Runnable) {
+        try {
+            if (mc.isCallingFromMinecraftThread) {
+                block.run()
+            } else {
+                mc.addScheduledTask(block)
+            }
+        } catch (e: Throwable) {
+            context[CoroutineExceptionHandler]?.handleException(context, e) ?: throw e
+        }
+    }
+}

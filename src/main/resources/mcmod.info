@@ -1,0 +1,16 @@
+[
+  {
+    "modid": "Aerolite",
+    "name": "Aerolite",
+    "description": "A minecraft hack mod based on FDPClient",
+    "version": "v4.0.0",
+    "mcversion": "1.8.9",
+    "url": "aerolite.tk",
+    "updateUrl": "",
+    "authorList": ["Stars", "Packet", "Ry4nnnnn", "Crazy"],
+    "credits": "",
+    "logoFile": "",
+    "screenshots": [],
+    "dependencies": []
+  }
+]

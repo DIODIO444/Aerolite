@@ -1,0 +1,45 @@
+# ---- Gradle ----
+.gradle/
+build/
+out/
+!gradle/wrapper/gradle-wrapper.jar
+
+# ---- IDE ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+bin/
+
+# ---- Minecraft run directory ----
+run/
+logs/
+crash-reports/
+screenshots/
+
+# ---- Local build / debug artifacts ----
+_compile*.log
+_build*.log
+_java*.log
+_*.py
+*.hprof
+hs_err_pid*.log
+
+# ---- WorkBuddy workspace metadata ----
+.workbuddy-ai/
+.workbuddy/
+
+# ---- OS ----
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ---- Secrets / local overrides ----
+local.properties
+*.token
+.env

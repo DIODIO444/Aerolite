@@ -1,0 +1,72 @@
+/*
+ * FDPClient Hacked Client
+ * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge.
+ * https://github.com/SkidderMC/FDPClient/
+ */
+package net.ccbluex.liquidbounce.features.module.modules.movement
+
+import net.ccbluex.liquidbounce.event.JumpEvent
+import net.ccbluex.liquidbounce.event.MoveEvent
+import net.ccbluex.liquidbounce.event.UpdateEvent
+import net.ccbluex.liquidbounce.event.handler
+import net.ccbluex.liquidbounce.features.module.Category
+import net.ccbluex.liquidbounce.features.module.Module
+import net.ccbluex.liquidbounce.utils.block.block
+import net.ccbluex.liquidbounce.utils.movement.MovementUtils.strafe
+import net.minecraft.block.BlockPane
+import net.minecraft.util.BlockPos
+import net.ccbluex.liquidbounce.config.boolean
+import net.ccbluex.liquidbounce.config.choices
+import net.ccbluex.liquidbounce.config.float
+
+object HighJump : Module("HighJump", Category.MOVEMENT, Category.SubCategory.MOVEMENT_MAIN) {
+    private val mode by choices("Mode", arrayOf("Vanilla", "Damage", "AACv3", "DAC", "Mineplex"), "Vanilla")
+        .describe("Anticheat bypass method used for the high jump.")
+    private val height by float("Height", 2f, 1.1f..5f) { mode in arrayOf("Vanilla", "Damage") }
+        .describe("Multiplier applied to the jump height.")
+    private val motion by float("Motion", 0.42f, 0.1f..1f) { mode == "Damage" }
+        .describe("Upward motion added when boosting off damage.")
+
+    private val glass by boolean("OnlyGlassPane", false)
+        .describe("Only high jump while standing on a glass pane.")
+
+    val onUpdate = handler<UpdateEvent> {
+        val thePlayer = mc.thePlayer
+
+        if (glass && BlockPos(thePlayer).block !is BlockPane)
+            return@handler
+
+        when (mode.lowercase()) {
+            "damage" -> if (thePlayer.hurtTime > 0 && thePlayer.onGround) thePlayer.motionY += motion * height
+            "aacv3" -> if (!thePlayer.onGround) thePlayer.motionY += 0.059
+            "dac" -> if (!thePlayer.onGround) thePlayer.motionY += 0.049999
+            "mineplex" -> if (!thePlayer.onGround) strafe(0.35f)
+        }
+    }
+
+    val onMove = handler<MoveEvent> {
+        val thePlayer = mc.thePlayer ?: return@handler
+
+        if (glass && BlockPos(thePlayer).block !is BlockPane)
+            return@handler
+        if (!thePlayer.onGround) {
+            if ("mineplex" == mode.lowercase()) {
+                thePlayer.motionY += if (thePlayer.fallDistance == 0f) 0.0499 else 0.05
+            }
+        }
+    }
+
+    val onJump = handler<JumpEvent> { event ->
+        val thePlayer = mc.thePlayer ?: return@handler
+
+        if (glass && BlockPos(thePlayer).block !is BlockPane)
+            return@handler
+        when (mode.lowercase()) {
+            "vanilla" -> event.motion *= height
+            "mineplex" -> event.motion = 0.47f
+        }
+    }
+
+    override val tag
+        get() = mode
+}

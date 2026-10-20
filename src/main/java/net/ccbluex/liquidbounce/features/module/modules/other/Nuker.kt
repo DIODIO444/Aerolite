@@ -1,0 +1,343 @@
+/*
+ * FDPClient Hacked Client
+ * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge.
+ * https://github.com/SkidderMC/FDPClient/
+ */
+package net.ccbluex.liquidbounce.features.module.modules.other
+
+import net.ccbluex.liquidbounce.config.*
+import net.ccbluex.liquidbounce.event.*
+import net.ccbluex.liquidbounce.features.module.Category
+import net.ccbluex.liquidbounce.features.module.Module
+import net.ccbluex.liquidbounce.features.module.modules.world.FastBreak
+import net.ccbluex.liquidbounce.ui.font.Fonts
+import net.ccbluex.liquidbounce.utils.block.BlockUtils.getCenterDistance
+import net.ccbluex.liquidbounce.utils.block.BlockUtils.searchBlocks
+import net.ccbluex.liquidbounce.utils.block.block
+import net.ccbluex.liquidbounce.utils.block.blockById
+import net.ccbluex.liquidbounce.utils.block.center
+import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
+import net.ccbluex.liquidbounce.utils.extensions.eyes
+import net.ccbluex.liquidbounce.utils.render.RenderUtils.drawBlockBox
+import net.ccbluex.liquidbounce.utils.render.RenderText.drawBlockDamageText
+import net.ccbluex.liquidbounce.utils.rotation.RotationPriority
+import net.ccbluex.liquidbounce.utils.rotation.RotationSettings
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.faceBlock
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.getFixedAngleDelta
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.rotationDifference
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.setTargetRotation
+import net.ccbluex.liquidbounce.utils.timing.TickTimer
+import net.minecraft.block.Block
+import net.minecraft.block.BlockLiquid
+import net.minecraft.client.gui.inventory.GuiContainer
+import net.minecraft.init.Blocks.air
+import net.minecraft.init.Blocks.bedrock
+import net.minecraft.item.ItemSword
+import net.minecraft.network.play.client.C07PacketPlayerDigging
+import net.minecraft.network.play.client.C0APacketAnimation
+import net.minecraft.network.play.client.C07PacketPlayerDigging.Action.START_DESTROY_BLOCK
+import net.minecraft.network.play.client.C07PacketPlayerDigging.Action.STOP_DESTROY_BLOCK
+import net.minecraft.util.BlockPos
+import net.minecraft.util.EnumFacing
+import java.awt.Color
+import kotlin.math.roundToInt
+
+object Nuker : Module("Nuker", Category.MISC, Category.SubCategory.MISCELLANEOUS, gameDetecting = false) {
+
+    /**
+     * OPTIONS
+     */
+
+    private val allBlocks by boolean("AllBlocks", true)
+        .describe("Break every block type instead of one chosen block.")
+    private val blocks by block("Block", 1) { !allBlocks }
+        .describe("The specific block id to break when AllBlocks is off.")
+
+    private val radius by float("Radius", 5.2F, 1F..6F)
+        .describe("Maximum reach distance for breaking blocks.")
+    private val throughWalls by boolean("ThroughWalls", false)
+        .describe("Allow breaking blocks that are out of line of sight.")
+    private val priority by choices("Priority", arrayOf("Distance", "Hardness", "LightOpacity"), "Distance")
+        .describe("Order in which candidate blocks are broken.")
+
+    private val options = RotationSettings(this).apply {
+        withRequestPriority(RotationPriority.NORMAL)
+        immediate = true
+
+        resetTicksValue.excludeWithState()
+        withoutKeepRotation()
+    }
+
+    private val layer by boolean("Layer", false)
+        .describe("Only break blocks at or above your feet level.")
+    private val floorMode by boolean("FloorMode", false)
+        .describe("Only break blocks on a single flat layer.")
+    private val floorOffset by int("FloorOffset", -1, -4..0) { floorMode }
+        .describe("Vertical offset of the floor layer relative to your feet.")
+    private val hitDelay by int("HitDelay", 4, 0..20)
+        .describe("Tick delay after breaking each block.")
+    private val nuke by int("Nuke", 1, 1..20)
+        .describe("Number of blocks to break per cycle.")
+    private val nukeDelay by int("NukeDelay", 1, 1..20)
+        .describe("Tick delay between nuke cycles.")
+
+    private val swingMode by choices("SwingMode", arrayOf("Normal", "Packet", "None"), "Normal")
+        .describe("How the hand swing is sent while breaking.")
+    private val ignoreOpenInventory by boolean("IgnoreOpenInventory", true)
+        .describe("Keep breaking even while a container GUI is open.")
+
+    private val blockProgress by boolean("BlockProgress", true).subjective()
+        .describe("Render break progress text on the target block.")
+
+    private val scale by float("Scale", 2F, 1F..6F) { blockProgress }.subjective()
+        .describe("Size of the break progress text.")
+    private val font by font("Font", Fonts.font40) { blockProgress }.subjective()
+        .describe("Font used for the break progress text.")
+    private val fontShadow by boolean("Shadow", true) { blockProgress }.subjective()
+        .describe("Draw a shadow behind the break progress text.")
+
+    private val color by color("Color", Color(200, 100, 0)) { blockProgress }.subjective()
+        .describe("Color of the break progress text.")
+
+    /**
+     * VALUES
+     */
+
+    private val attackedBlocks = hashSetOf<BlockPos>()
+    private var currentBlock: BlockPos? = null
+    private var blockHitDelay = 0
+
+    private val nukeTimer = TickTimer()
+    private var nukedCount = 0
+
+    var currentDamage = 0F
+
+    private val targetingGroup = Configurable("Targeting")
+    private val breakingGroup = Configurable("Breaking")
+    private val rotationsGroup = Configurable("Rotations")
+    private val renderGroup = Configurable("Render")
+
+    init {
+        moveValues(targetingGroup,
+            "AllBlocks", "Block", "Radius", "ThroughWalls", "Priority", "Layer", "FloorMode", "FloorOffset")
+
+        moveValues(breakingGroup,
+            "HitDelay", "Nuke", "NukeDelay", "SwingMode", "IgnoreOpenInventory")
+
+        options.nestInto(rotationsGroup)
+
+        moveValues(renderGroup,
+            "BlockProgress", "Scale", "Font", "Shadow", "Color")
+
+        addValues(listOf(targetingGroup, breakingGroup, rotationsGroup, renderGroup))
+    }
+    val onUpdate = handler<UpdateEvent> {
+        // Pause breaking while a container GUI is open
+        if (!ignoreOpenInventory && mc.currentScreen is GuiContainer) {
+            return@handler
+        }
+
+        // Block hit delay
+        if (blockHitDelay > 0 && !FastBreak.handleEvents()) {
+            blockHitDelay--
+            return@handler
+        }
+
+        // Reset bps
+        nukeTimer.update()
+
+        if (nukeTimer.hasTimePassed(nukeDelay)) {
+            nukedCount = 0
+            nukeTimer.reset()
+        }
+
+        // Clear blocks
+        attackedBlocks.clear()
+
+        val player = mc.thePlayer ?: return@handler
+        val world = mc.theWorld ?: return@handler
+
+        val eyes = player.eyes
+
+        if (!mc.playerController.isInCreativeMode) {
+            val validBlocks = searchBlocks(radius.roundToInt() + 1, null) { pos, block ->
+                if (getCenterDistance(pos) <= radius && validBlock(block)) {
+                    if (!allBlocks && Block.getIdFromBlock(block) != blocks) {
+                        return@searchBlocks false
+                    }
+
+                    // Layer: Break all blocks above you
+                    if (layer && pos.y < player.posY) {
+                        return@searchBlocks false
+                    }
+
+                    if (floorMode && pos.y != Math.floor(player.posY).toInt() + floorOffset) {
+                        return@searchBlocks false
+                    }
+
+                    // ThroughWalls: Just break blocks in your sight
+                    // Raytrace player eyes to block position (through walls check) and check if block is visible
+                    throughWalls || world.rayTraceBlocks(eyes, pos.center, false, true, false)?.blockPos == pos
+                } else false // Bad block
+            }
+
+            val safePos = BlockPos(player).down()
+
+            val sortedBlocks = when (priority) {
+                "Distance" -> validBlocks.entries.sortedBy { (pos, _) ->
+                    val distance = getCenterDistance(pos)
+                    if (pos.x == safePos.x && safePos.y <= pos.y && pos.z == safePos.z) Double.MAX_VALUE - distance // Last block
+                    else distance
+                }
+
+                "Hardness" -> validBlocks.entries.sortedByDescending { (pos, block) ->
+                    val hardness = block.getPlayerRelativeBlockHardness(player, world, pos).toDouble()
+                    if (pos.x == safePos.x && safePos.y <= pos.y && pos.z == safePos.z) Double.MIN_VALUE + hardness // Last block
+                    else hardness
+                }
+
+                "LightOpacity" -> validBlocks.entries.sortedByDescending { (pos, block) ->
+                    val opacity = block.getLightOpacity(world, pos).toDouble()
+                    if (pos.x == safePos.x && safePos.y <= pos.y && pos.z == safePos.z) Double.MIN_VALUE + opacity // Last block
+                    else opacity
+                }
+
+                else -> return@handler // Handle invalid priority
+            }
+
+            for ((blockPos, block) in sortedBlocks) {
+                // Reset current damage in case of block switch
+                if (blockPos != currentBlock) currentDamage = 0F
+
+                // Change head rotations to next block
+                if (options.rotationsActive) {
+                    val rotation = faceBlock(blockPos) ?: return@handler // In case of a mistake. Prevent flag.
+
+                    setTargetRotation(rotation.rotation, options = options)
+
+                    // Don't dig until the server-side rotation actually reaches the block, otherwise
+                    // the digging packets go out at a non-matching look (rotation lands a tick later).
+                    if (rotationDifference(rotation.rotation) > getFixedAngleDelta()) {
+                        return@handler
+                    }
+                }
+
+                // Set next target block
+                currentBlock = blockPos
+                attackedBlocks += blockPos
+
+                EventManager.call(ClickBlockEvent(blockPos, EnumFacing.DOWN))
+
+                // Start block breaking
+                if (currentDamage == 0F) {
+                    sendPacket(C07PacketPlayerDigging(START_DESTROY_BLOCK, blockPos, EnumFacing.DOWN))
+
+                    // End block break if able to break instant
+                    if (block.getPlayerRelativeBlockHardness(player, world, blockPos) >= 1F) {
+                        currentDamage = 0F
+                        swing()
+                        mc.playerController.onPlayerDestroyBlock(blockPos, EnumFacing.DOWN)
+                        blockHitDelay = hitDelay
+                        validBlocks -= blockPos
+                        nukedCount++
+                        continue // Next break
+                    }
+                }
+
+                // Break block
+                swing()
+                currentDamage += block.getPlayerRelativeBlockHardness(player, world, blockPos)
+                world.sendBlockBreakProgress(player.entityId, blockPos, (currentDamage * 10F).toInt() - 1)
+
+                // End of breaking block
+                if (currentDamage >= 1F) {
+                    sendPacket(C07PacketPlayerDigging(STOP_DESTROY_BLOCK, blockPos, EnumFacing.DOWN))
+                    mc.playerController.onPlayerDestroyBlock(blockPos, EnumFacing.DOWN)
+                    blockHitDelay = hitDelay
+                    currentDamage = 0F
+                }
+
+                return@handler // Break out
+            }
+        } else {
+            // Fast creative mode nuker (CreativeStorm option)
+
+            // Unable to break with swords in creative mode
+            if (player.heldItem?.item is ItemSword) return@handler
+
+            searchBlocks(radius.roundToInt() + 1, null) { pos, block ->
+                if (getCenterDistance(pos) <= radius && validBlock(block)) {
+                    // Layer: Break all blocks above you
+                    if (layer && pos.y < player.posY) {
+                        return@searchBlocks false
+                    }
+
+                    if (floorMode && pos.y != Math.floor(player.posY).toInt() + floorOffset) {
+                        return@searchBlocks false
+                    }
+
+                    // ThroughWalls: Only break blocks in sight
+                    // Raytrace player eyes to block position (through walls check) and check if block is visible
+                    val isVisible =
+                        throughWalls || world.rayTraceBlocks(eyes, pos.center, false, true, false)?.blockPos == pos
+
+                    if (isVisible) {
+                        // Instant break block
+                        sendPacket(C07PacketPlayerDigging(START_DESTROY_BLOCK, pos, EnumFacing.DOWN))
+                        swing()
+                        sendPacket(C07PacketPlayerDigging(STOP_DESTROY_BLOCK, pos, EnumFacing.DOWN))
+                        attackedBlocks += pos
+                    }
+
+                    return@searchBlocks true
+                }
+
+                return@searchBlocks false
+            }
+        }
+    }
+
+    val onRender3D = handler<Render3DEvent> {
+        val player = mc.thePlayer ?: return@handler
+
+        if (blocks.blockById == air) return@handler
+
+        for (pos in attackedBlocks) {
+            if (blockProgress) {
+                pos.drawBlockDamageText(
+                    currentDamage,
+                    font,
+                    fontShadow,
+                    Color(color, true).rgb,
+                    scale,
+                )
+            }
+
+            // Just draw all blocks
+            drawBlockBox(pos, Color.RED, true, true, 1f)
+        }
+
+        // Safe block
+        if (!layer) {
+            val safePos = BlockPos(player).down()
+            val safeBlock = safePos.block
+            if (safeBlock != null && validBlock(safeBlock)) drawBlockBox(safePos, Color.GREEN, true, true, 1f)
+        }
+    }
+
+    /**
+     * Check if [block] is a valid block to break
+     */
+    private fun validBlock(block: Block) = block != air && block !is BlockLiquid && block != bedrock
+
+    /**
+     * Swing the hand according to the selected [swingMode]
+     */
+    private fun swing() {
+        when (swingMode.lowercase()) {
+            "normal" -> mc.thePlayer?.swingItem()
+            "packet" -> sendPacket(C0APacketAnimation())
+        }
+    }
+
+}
