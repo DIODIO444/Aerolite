@@ -6,6 +6,7 @@
 package net.ccbluex.liquidbounce.ui.font
 
 import net.ccbluex.liquidbounce.ui.i18n.LanguageManager
+import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.client.renderer.texture.TextureUtil
 import net.minecraftforge.fml.relauncher.Side
@@ -168,15 +169,33 @@ import java.awt.image.BufferedImage
                 // CJK / any char outside the pre-baked atlas: draw it from its own glyph texture.
                 GL11.glEnd()
 
-                val glyph = glyphFor(char)
+                var glyph: CjkGlyph? = null
+
+                try {
+                    glyph = glyphFor(char)
+                } catch (throwable: Throwable) {
+                    // Never let a broken glyph take the whole string down.
+                }
 
                 if (glyph != null) {
                     GlStateManager.bindTexture(glyph.textureId)
                     GlStateManager.color(red, green, blue, alpha)
 
+                    // Immediate mode needs its own begin/end pair — the quads of the main batch
+                    // were already flushed above.
+                    GL11.glBegin(GL11.GL_QUADS)
                     drawGlyph(glyph, currX.toFloat(), 0f)
+                    GL11.glEnd()
 
                     currX += cjkMetrics.charWidth(char).toDouble()
+                } else {
+                    // Fallback to the vanilla unicode font: blurry, but the text stays readable.
+                    GlStateManager.scale(2f, 2f, 2f)
+                    Minecraft.getMinecraft().fontRendererObj.drawString(
+                        char.toString(), (currX * 0.5).toFloat() + 1f, 2f, color, false
+                    )
+                    currX += Minecraft.getMinecraft().fontRendererObj.getStringWidth(char.toString()) * 2.0
+                    GlStateManager.scale(0.5f, 0.5f, 0.5f)
                 }
 
                 GlStateManager.bindTexture(textureID)
