@@ -94,12 +94,25 @@ import java.awt.image.BufferedImage
 
     // ---- CJK support ----
 
-    private val cjkFont: Font = resolveCjkFont(font.size)
+    /**
+     * The bundled font (HarmonyOS Sans SC) already contains CJK glyphs, so Chinese text can use the
+     * very same typeface as the latin text. Only characters missing from it fall back to a system
+     * CJK font.
+     */
+    private val cjkFont: Font = if (font.canDisplay('中')) font else resolveCjkFont(font.size)
 
-    private val cjkMetrics: FontMetrics = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics().let {
-        it.font = cjkFont
-        it.fontMetrics
-    }
+    private val mainMetrics: FontMetrics = metricsOf(font)
+    private val cjkMetrics: FontMetrics = metricsOf(cjkFont)
+
+    private fun metricsOf(targetFont: Font): FontMetrics =
+        BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics().let {
+            it.font = targetFont
+            it.fontMetrics
+        }
+
+    private fun metricsFor(ch: Char): FontMetrics = if (font.canDisplay(ch)) mainMetrics else cjkMetrics
+
+    private fun fontFor(ch: Char): Font = if (font.canDisplay(ch)) font else cjkFont
 
     private val cjkGlyphs = HashMap<Char, CjkGlyph>()
     private val cjkGlyphOrder = ArrayDeque<Char>()
@@ -187,7 +200,7 @@ import java.awt.image.BufferedImage
                     drawGlyph(glyph, currX.toFloat(), 0f)
                     GL11.glEnd()
 
-                    currX += cjkMetrics.charWidth(char).toDouble()
+                    currX += metricsFor(char).charWidth(char).toDouble()
                 } else {
                     // Fallback to the vanilla unicode font: blurry, but the text stays readable.
                     GlStateManager.scale(2f, 2f, 2f)
@@ -271,12 +284,12 @@ import java.awt.image.BufferedImage
     private fun glyphFor(char: Char): CjkGlyph? {
         cjkGlyphs[char]?.let { return it }
 
-        val image = drawCharToImage(char, cjkFont)
+        val image = drawCharToImage(char, fontFor(char))
 
         if (image.width <= 0 || image.height <= 0) return null
 
         val textureId = TextureUtil.uploadTextureImageAllocate(
-            TextureUtil.glGenTextures(), image, false, true
+            TextureUtil.glGenTextures(), image, true, true
         )
 
         val glyph = CjkGlyph(textureId, image.width, image.height)
@@ -333,7 +346,9 @@ import java.awt.image.BufferedImage
         for (targetChar in startChar until stopChar) if (fontImages[targetChar] != null && charLocations[targetChar] != null)
             graphics2D.drawImage(fontImages[targetChar], charLocations[targetChar]!!.x, charLocations[targetChar]!!.y, null)
 
-        textureID = TextureUtil.uploadTextureImageAllocate(TextureUtil.glGenTextures(), bufferedImage, false, true)
+        // blur = true → GL_LINEAR: the atlas is drawn at 0.5x, nearest-neighbour sampling would
+        // drop every other texel and make the glyph edges look jagged.
+        textureID = TextureUtil.uploadTextureImageAllocate(TextureUtil.glGenTextures(), bufferedImage, true, true)
     }
 
     /**
@@ -386,7 +401,7 @@ import java.awt.image.BufferedImage
 
                 width += fontChar.width - 8
             } else {
-                width += cjkMetrics.charWidth(c)
+                width += metricsFor(c).charWidth(c)
             }
         }
 
