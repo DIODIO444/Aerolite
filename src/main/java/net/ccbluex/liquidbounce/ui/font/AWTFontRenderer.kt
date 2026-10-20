@@ -6,7 +6,6 @@
 package net.ccbluex.liquidbounce.ui.font
 
 import net.ccbluex.liquidbounce.ui.i18n.LanguageManager
-import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.client.renderer.texture.TextureUtil
 import net.minecraftforge.fml.relauncher.Side
@@ -14,12 +13,19 @@ import net.minecraftforge.fml.relauncher.SideOnly
 import org.lwjgl.opengl.GL11
 import java.awt.Color
 import java.awt.Font
+import java.awt.FontMetrics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 
 /**
  * Generate new bitmap based font renderer
+ *
+ * ASCII is pre-baked into a single atlas at 2x resolution and drawn with a 0.5 scale, which keeps
+ * it pixel aligned. Characters outside the atlas (all CJK text) used to fall back to the vanilla
+ * `fontRendererObj`, i.e. to the 16x16 unicode pages — that is what made Chinese text look blurry.
+ * They are now rasterised on demand with a CJK capable font at the same 2x resolution, so they
+ * share the crispness of the latin glyphs.
  */
 @SideOnly(Side.CLIENT) class AWTFontRenderer(val font: Font, startChar: Int = 0, stopChar: Int = 255) {
 
@@ -31,6 +37,29 @@ import java.awt.image.BufferedImage
         private var gcTicks: Int = 0
         private const val GC_TICKS = 600 // Start garbage collection every 600 frames
         private const val CACHED_FONT_REMOVAL_TIME = 30000 // Remove cached texts after 30s of not being used
+
+        /** Upper bound for cached CJK glyph textures, the oldest ones are dropped first. */
+        private const val MAX_CJK_GLYPHS = 4096
+
+        /** Fonts that ship CJK glyphs on the common platforms. */
+        private val CJK_FONT_NAMES = arrayOf(
+            "Microsoft YaHei", "微软雅黑", "SimSun", "宋体", "Noto Sans CJK SC",
+            "Source Han Sans SC", "PingFang SC", "WenQuanYi Micro Hei", Font.SANS_SERIF
+        )
+
+        /**
+         * Picks a font that can actually display Chinese characters at [size].
+         */
+        private fun resolveCjkFont(size: Int): Font {
+            for (name in CJK_FONT_NAMES) {
+                val candidate = Font(name, Font.PLAIN, size)
+
+                if (candidate.canDisplay('中') && candidate.canDisplay('国')) return candidate
+            }
+
+            // Logical font — Java performs glyph fallback for it, so it always has CJK coverage.
+            return Font(Font.SANS_SERIF, Font.PLAIN, size)
+        }
 
         fun garbageCollectionTick() {
             if (gcTicks++ > GC_TICKS) {
@@ -62,6 +91,20 @@ import java.awt.image.BufferedImage
     private var textureWidth = 0
     private var textureHeight = 0
 
+    // ---- CJK support ----
+
+    private val cjkFont: Font = resolveCjkFont(font.size)
+
+    private val cjkMetrics: FontMetrics = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics().let {
+        it.font = cjkFont
+        it.fontMetrics
+    }
+
+    private val cjkGlyphs = HashMap<Char, CjkGlyph>()
+    private val cjkGlyphOrder = ArrayDeque<Char>()
+
+    private data class CjkGlyph(val textureId: Int, val width: Int, val height: Int)
+
     val height: Int
         get() = (fontHeight - 8) / 2
 
@@ -81,7 +124,6 @@ import java.awt.image.BufferedImage
      */
     fun drawString(rawtext: String, x: Double, y: Double, color: Int) {
         val scale = 0.5
-        val reverse = 1 / scale
 
         val text = LanguageManager.replace(rawtext)
 
@@ -122,16 +164,21 @@ import java.awt.image.BufferedImage
         GL11.glBegin(GL11.GL_QUADS)
 
         for (char in text.toCharArray()) {
-            // This will miss the chinese chars, I don't think that's a right way.
             if (char.toInt() >= charLocations.size) {
+                // CJK / any char outside the pre-baked atlas: draw it from its own glyph texture.
                 GL11.glEnd()
 
-                // Ugly solution, because floating point numbers, but I think that shouldn't be that much of a problem
-                GlStateManager.scale(reverse, reverse, reverse)
-                Minecraft.getMinecraft().fontRendererObj.drawString("$char", currX.toFloat() * scale.toFloat() + 1, 2f, color, false)
-                currX += Minecraft.getMinecraft().fontRendererObj.getStringWidth("$char") * reverse
+                val glyph = glyphFor(char)
 
-                GlStateManager.scale(scale, scale, scale)
+                if (glyph != null) {
+                    GlStateManager.bindTexture(glyph.textureId)
+                    GlStateManager.color(red, green, blue, alpha)
+
+                    drawGlyph(glyph, currX.toFloat(), 0f)
+
+                    currX += cjkMetrics.charWidth(char).toDouble()
+                }
+
                 GlStateManager.bindTexture(textureID)
                 GlStateManager.color(red, green, blue, alpha)
 
@@ -183,6 +230,50 @@ import java.awt.image.BufferedImage
     }
 
     /**
+     * Draws a standalone glyph texture (1:1 UVs).
+     */
+    private fun drawGlyph(glyph: CjkGlyph, x: Float, y: Float) {
+        val width = glyph.width.toFloat()
+        val height = glyph.height.toFloat()
+
+        GL11.glTexCoord2f(0f, 0f)
+        GL11.glVertex2f(x, y)
+        GL11.glTexCoord2f(0f, 1f)
+        GL11.glVertex2f(x, y + height)
+        GL11.glTexCoord2f(1f, 1f)
+        GL11.glVertex2f(x + width, y + height)
+        GL11.glTexCoord2f(1f, 0f)
+        GL11.glVertex2f(x + width, y)
+    }
+
+    /**
+     * Rasterises [char] with the CJK font and uploads it as its own texture, cached by character.
+     */
+    private fun glyphFor(char: Char): CjkGlyph? {
+        cjkGlyphs[char]?.let { return it }
+
+        val image = drawCharToImage(char, cjkFont)
+
+        if (image.width <= 0 || image.height <= 0) return null
+
+        val textureId = TextureUtil.uploadTextureImageAllocate(
+            TextureUtil.glGenTextures(), image, false, true
+        )
+
+        val glyph = CjkGlyph(textureId, image.width, image.height)
+
+        cjkGlyphs[char] = glyph
+        cjkGlyphOrder.addLast(char)
+
+        while (cjkGlyphOrder.size > MAX_CJK_GLYPHS) {
+            val oldest = cjkGlyphOrder.removeFirst()
+            cjkGlyphs.remove(oldest)?.let { GL11.glDeleteTextures(it.textureId) }
+        }
+
+        return glyph
+    }
+
+    /**
      * Render font chars to a bitmap
      */
     private fun renderBitmap(startChar: Int, stopChar: Int) {
@@ -192,7 +283,7 @@ import java.awt.image.BufferedImage
         var charY = 0
 
         for (targetChar in startChar until stopChar) {
-            val fontImage = drawCharToImage(targetChar.toChar())
+            val fontImage = drawCharToImage(targetChar.toChar(), font)
             val fontChar = CharLocation(charX, charY, fontImage.width, fontImage.height)
 
             if (fontChar.height > fontHeight) fontHeight = fontChar.height
@@ -230,11 +321,12 @@ import java.awt.image.BufferedImage
      * Draw a char to a buffered image
      *
      * @param ch char to render
+     * @param targetFont font used for this glyph (the main font or the CJK fallback)
      * @return image of the char
      */
-    private fun drawCharToImage(ch: Char): BufferedImage {
+    private fun drawCharToImage(ch: Char, targetFont: Font): BufferedImage {
         val graphics2D = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).graphics as Graphics2D
-        graphics2D.font = font
+        graphics2D.font = targetFont
 
         val fontMetrics = graphics2D.fontMetrics
 
@@ -242,18 +334,19 @@ import java.awt.image.BufferedImage
         if (charWidth <= 0) charWidth = 7
 
         var charHeight = fontMetrics.height + 3
-        if (charHeight <= 0) charHeight = font.size
+        if (charHeight <= 0) charHeight = targetFont.size
 
         val fontImage = BufferedImage(charWidth, charHeight, BufferedImage.TYPE_INT_ARGB)
         val graphics = fontImage.graphics as Graphics2D
 
-        graphics.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
-        graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_GASP)
-        graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB)
+        // Grayscale antialiasing with integer advances keeps glyphs sharp: sub-pixel (LCD) hints
+        // leave colour fringes on transparent textures and fractional metrics blur the edges.
+        graphics.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF)
+        graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
         graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
 
-
-        graphics.font = font
+        graphics.font = targetFont
         graphics.color = Color.WHITE
         graphics.drawString(ch.toString(), 3, 1 + fontMetrics.ascent)
         return fontImage
@@ -266,21 +359,29 @@ import java.awt.image.BufferedImage
      * @return the width of the text
      */
     fun getStringWidth(text: String): Int {
-        var width = 0
+        var width = 0.0
 
         for (c in text.toCharArray()) {
-            val fontChar = charLocations[if (c.toInt() < charLocations.size) c.toInt()
-            else '\u0003'.toInt()] ?: continue
+            if (c.toInt() < charLocations.size) {
+                val fontChar = charLocations[c.toInt()] ?: continue
 
-            width += fontChar.width - 8
+                width += fontChar.width - 8
+            } else {
+                width += cjkMetrics.charWidth(c)
+            }
         }
 
-        return width / 2
+        return (width / 2).toInt()
     }
 
     open fun close() {
         cachedChars.forEach { (_, cachedFont) -> cachedFont.finalize() }
         cachedChars.clear()
+
+        for (glyph in cjkGlyphs.values) GL11.glDeleteTextures(glyph.textureId)
+
+        cjkGlyphs.clear()
+        cjkGlyphOrder.clear()
     }
 
     private fun finalize() {
