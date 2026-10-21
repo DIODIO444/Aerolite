@@ -13,6 +13,7 @@ import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.features.module.modules.combat.Backtrack.runWithSimulatedPosition
 import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
 import net.ccbluex.liquidbounce.features.module.modules.player.Blink
+import net.ccbluex.liquidbounce.features.module.modules.client.HUD
 import net.ccbluex.liquidbounce.features.module.modules.world.Fucker
 import net.ccbluex.liquidbounce.features.module.modules.other.Nuker
 import net.ccbluex.liquidbounce.features.module.modules.player.scaffolds.*
@@ -37,7 +38,9 @@ import net.ccbluex.liquidbounce.utils.inventory.ItemUtils.isConsumingItem
 import net.ccbluex.liquidbounce.utils.inventory.SilentHotbar
 import net.ccbluex.liquidbounce.utils.kotlin.RandomUtils.nextInt
 import net.ccbluex.liquidbounce.utils.render.ColorSettingsInteger
+import net.ccbluex.liquidbounce.utils.render.EaseUtils
 import net.ccbluex.liquidbounce.utils.render.Render3D
+import net.ccbluex.liquidbounce.utils.render.RenderUtils
 import net.ccbluex.liquidbounce.utils.rotation.RandomizationSettings
 import net.ccbluex.liquidbounce.utils.rotation.RaycastUtils.raycastEntity
 import net.ccbluex.liquidbounce.utils.rotation.RaycastUtils.runWithModifiedRaycastResult
@@ -426,6 +429,21 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
     private val rangeIndicatorOutline by boolean("RangeIndicatorOutline", true) { rangeIndicator }.subjective()
         .describe("Draw an outline around the reach ring.")
 
+    // Circle
+    private val circle by boolean("Circle", false).subjective()
+        .describe("Draw a thin circle on the ground around you.")
+    private val circleThickness by float("CircleThickness", 2f, 0.5f..10f) { circle }.subjective()
+        .describe("Line width of the circle.")
+    private val circleColor by color("CircleColor", Color(0, 160, 255, 200)) { circle }.subjective()
+        .describe("Color of the circle.")
+
+    // Target marks
+    private val mark by choices(
+        "Mark", arrayOf("Off", "Liquid", "Block", "FDP", "Jello", "Lies"), "Off"
+    ).subjective().describe("How valid targets are marked in the world.")
+    private val blockMarkExpand by float("BlockMarkExpand", 0.1f, 0f..1f) { mark == "Block" }.subjective()
+        .describe("Expand the block mark box by this amount.")
+
     private val clickerGroup = Configurable("Clicker")
     private val rangeGroup = Configurable("Range")
     private val targetGroup = Configurable("Target")
@@ -438,6 +456,8 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
     private val failSwingGroup = Configurable("FailSwing")
     private val targetRenderingGroup = Configurable("TargetRendering")
     private val rangeIndicatorGroup = Configurable("RangeIndicator")
+    private val circleGroup = Configurable("Circle")
+    private val markGroup = Configurable("Mark")
 
     init {
         moveValues(clickerGroup,
@@ -484,10 +504,13 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
         moveValues(targetRenderingGroup, "RenderAimPointBox", "AimPointBoxColor", "AimPointBoxSize")
         moveValues(rangeIndicatorGroup,
             "RangeIndicator", "RangeIndicatorColor", "RangeIndicatorActiveColor", "RangeIndicatorOutline")
+        moveValues(circleGroup, "Circle", "CircleThickness", "CircleColor")
+        moveValues(markGroup, "Mark", "BlockMarkExpand")
 
         addValues(listOf(
             clickerGroup, rangeGroup, targetGroup, rotationsGroup, aimPointGroup, raycastGroup,
             autoBlockingGroup, failSwingGroup, targetRenderingGroup, rangeIndicatorGroup,
+            circleGroup, markGroup,
         ))
     }
     /**
@@ -717,6 +740,10 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
         drawAimPointBox()
 
         renderRangeIndicator()
+
+        renderCircle()
+
+        renderTargetMarks()
 
         if (cancelRun) {
             target = null
@@ -1464,6 +1491,305 @@ private fun updateHittable() {
         activationSlot && SilentHotbar.currentSlot != preferredSlot - 1 -> true
 
         else -> false
+    }
+
+    /**
+     * Thin range circle, restored from the legacy KillAura render event.
+     */
+    private fun renderCircle() {
+        if (!circle) return
+
+        val player = mc.thePlayer ?: return
+
+        val pos = player.interpolatedPosition(player.prevPos)
+        val renderPos = mc.renderManager.renderPos
+        val x = pos.xCoord - renderPos.xCoord
+        val y = pos.yCoord - renderPos.yCoord + 0.02
+        val z = pos.zCoord - renderPos.zCoord
+        val radius = maxRange.toDouble()
+        val color = Color(circleColor, true)
+
+        GL11.glPushMatrix()
+        GL11.glEnable(GL11.GL_BLEND)
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA)
+        GL11.glDisable(GL11.GL_TEXTURE_2D)
+        GL11.glEnable(GL11.GL_LINE_SMOOTH)
+        GL11.glDisable(GL11.GL_DEPTH_TEST)
+        GL11.glLineWidth(circleThickness)
+        GL11.glColor4f(color.red / 255f, color.green / 255f, color.blue / 255f, color.alpha / 255f)
+
+        GL11.glBegin(GL11.GL_LINE_LOOP)
+        for (i in 0..360 step 5) {
+            val angle = Math.toRadians(i.toDouble())
+            GL11.glVertex3d(x + cos(angle) * radius, y, z + sin(angle) * radius)
+        }
+        GL11.glEnd()
+
+        GL11.glColor4f(1f, 1f, 1f, 1f)
+        GL11.glEnable(GL11.GL_DEPTH_TEST)
+        GL11.glDisable(GL11.GL_LINE_SMOOTH)
+        GL11.glEnable(GL11.GL_TEXTURE_2D)
+        GL11.glDisable(GL11.GL_BLEND)
+        GL11.glPopMatrix()
+    }
+
+    /**
+     * Draws the configured [mark] style around every valid target.
+     */
+    private fun renderTargetMarks() {
+        if (mark == "Off") return
+
+        val entities = LinkedHashSet<EntityLivingBase>()
+
+        target?.let(entities::add)
+        entities.addAll(targetTracker.targets())
+
+        if (entities.isEmpty()) return
+
+        for (entity in entities) {
+            when (mark.lowercase()) {
+                "liquid" -> drawMarkPlatform(
+                    entity,
+                    if (entity.hurtTime <= 0) Color(37, 126, 255, 170) else Color(255, 0, 0, 170)
+                )
+
+                "block" -> {
+                    val originalBox = entity.entityBoundingBox
+                    entity.entityBoundingBox = originalBox.expand(
+                        blockMarkExpand.toDouble(), blockMarkExpand.toDouble(), blockMarkExpand.toDouble()
+                    )
+
+                    RenderUtils.drawEntityBox(
+                        entity,
+                        if (entity.hurtTime <= 0) {
+                            if (entity == target) Color(25, 230, 0, 170) else Color(10, 250, 10, 170)
+                        } else {
+                            Color(255, 0, 0, 170)
+                        },
+                        true, true, 4f
+                    )
+
+                    entity.entityBoundingBox = originalBox
+                }
+
+                "fdp" -> drawRainbowMark(entity)
+
+                "jello" -> drawJelloMark(entity)
+
+                "lies" -> drawLiesMark(entity)
+            }
+        }
+    }
+
+    private fun drawMarkPlatform(entity: EntityLivingBase, color: Color) {
+        val renderManager = mc.renderManager
+        val partialTicks = mc.timer.renderPartialTicks
+        val x = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks - renderManager.viewerPosX
+        val y = entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks - renderManager.viewerPosY + 0.02
+        val z = entity.lastTickPosZ + (entity.posZ - entity.lastTickPosZ) * partialTicks - renderManager.viewerPosZ
+        val radius = entity.width / 2.0 + 0.1
+
+        GL11.glPushMatrix()
+        GL11.glEnable(GL11.GL_BLEND)
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA)
+        GL11.glDisable(GL11.GL_TEXTURE_2D)
+        GL11.glDisable(GL11.GL_DEPTH_TEST)
+        GL11.glColor4f(color.red / 255f, color.green / 255f, color.blue / 255f, color.alpha / 255f)
+
+        GL11.glBegin(GL11.GL_QUADS)
+        GL11.glVertex3d(x - radius, y, z - radius)
+        GL11.glVertex3d(x - radius, y, z + radius)
+        GL11.glVertex3d(x + radius, y, z + radius)
+        GL11.glVertex3d(x + radius, y, z - radius)
+        GL11.glEnd()
+
+        GL11.glColor4f(1f, 1f, 1f, 1f)
+        GL11.glEnable(GL11.GL_DEPTH_TEST)
+        GL11.glEnable(GL11.GL_TEXTURE_2D)
+        GL11.glDisable(GL11.GL_BLEND)
+        GL11.glPopMatrix()
+    }
+
+    private fun drawRainbowMark(entity: EntityLivingBase) {
+        val drawTime = (System.currentTimeMillis() % 1500).toInt()
+        val drawMode = drawTime > 750
+        var drawPercent = drawTime / 750.0
+
+        if (!drawMode) drawPercent = 1 - drawPercent else drawPercent -= 1
+        drawPercent = EaseUtils.easeInOutQuad(drawPercent)
+
+        val box = entity.hitBox
+        val radius = ((box.maxX - box.minX) + (box.maxZ - box.minZ)) * 0.5f
+        val height = box.maxY - box.minY
+        val partialTicks = mc.timer.renderPartialTicks
+        val x = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks - mc.renderManager.viewerPosX
+        val y = entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks - mc.renderManager.viewerPosY + height * drawPercent
+        val z = entity.lastTickPosZ + (entity.posZ - entity.lastTickPosZ) * partialTicks - mc.renderManager.viewerPosZ
+
+        mc.entityRenderer.disableLightmap()
+        GL11.glPushMatrix()
+        GL11.glDisable(GL11.GL_TEXTURE_2D)
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA)
+        GL11.glEnable(GL11.GL_LINE_SMOOTH)
+        GL11.glEnable(GL11.GL_BLEND)
+        GL11.glDisable(GL11.GL_DEPTH_TEST)
+        GL11.glLineWidth((radius * 8f).toFloat())
+
+        GL11.glBegin(GL11.GL_LINE_STRIP)
+        for (i in 0..360 step 10) {
+            val hue = if (i < 180) {
+                HUD.rainbowStartValue.get() + (HUD.rainbowStopValue.get() - HUD.rainbowStartValue.get()) * (i / 180f)
+            } else {
+                HUD.rainbowStartValue.get() + (HUD.rainbowStopValue.get() - HUD.rainbowStartValue.get()) * (-(i - 360) / 180f)
+            }
+            val color = Color.getHSBColor(hue, 0.7f, 1.0f)
+
+            GL11.glColor4f(color.red / 255f, color.green / 255f, color.blue / 255f, color.alpha / 255f)
+            GL11.glVertex3d(x - sin(i * Math.PI / 180F) * radius, y, z + cos(i * Math.PI / 180F) * radius)
+        }
+        GL11.glEnd()
+
+        GL11.glColor4f(1f, 1f, 1f, 1f)
+        GL11.glEnable(GL11.GL_DEPTH_TEST)
+        GL11.glDisable(GL11.GL_LINE_SMOOTH)
+        GL11.glDisable(GL11.GL_BLEND)
+        GL11.glEnable(GL11.GL_TEXTURE_2D)
+        GL11.glPopMatrix()
+    }
+
+    private fun drawJelloMark(entity: EntityLivingBase) {
+        val drawTime = (System.currentTimeMillis() % 2000).toInt()
+        val drawMode = drawTime > 1000
+        var drawPercent = drawTime / 1000.0
+
+        if (!drawMode) drawPercent = 1 - drawPercent else drawPercent -= 1
+        drawPercent = EaseUtils.easeInOutQuad(drawPercent)
+
+        val box = entity.hitBox
+        val radius = box.maxX - box.minX
+        val height = box.maxY - box.minY
+        val partialTicks = mc.timer.renderPartialTicks
+        val posX = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks
+        var posY = entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks
+        val posZ = entity.lastTickPosZ + (entity.posZ - entity.lastTickPosZ) * partialTicks
+
+        if (drawMode) posY -= 0.5 else posY += 0.5
+
+        val points = ArrayList<Vec3>()
+        for (i in 0..360 step 7) {
+            points.add(
+                Vec3(
+                    posX - sin(i * Math.PI / 180F) * radius,
+                    posY + height * drawPercent,
+                    posZ + cos(i * Math.PI / 180F) * radius
+                )
+            )
+        }
+        points.add(points[0])
+
+        mc.entityRenderer.disableLightmap()
+        GL11.glPushMatrix()
+        GL11.glDisable(GL11.GL_TEXTURE_2D)
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA)
+        GL11.glEnable(GL11.GL_LINE_SMOOTH)
+        GL11.glEnable(GL11.GL_BLEND)
+        GL11.glDisable(GL11.GL_DEPTH_TEST)
+        GL11.glBegin(GL11.GL_LINE_STRIP)
+
+        val baseMove = (if (drawPercent > 0.5) 1 - drawPercent else drawPercent) * 2
+        val min = (height / 60) * 20 * (1 - baseMove) * (if (drawMode) -1 else 1)
+
+        for (i in 0..20) {
+            var moveFace = (height / 60F) * i * baseMove
+            if (drawMode) moveFace = -moveFace
+
+            val firstPoint = points[0]
+            GL11.glVertex3d(
+                firstPoint.xCoord - mc.renderManager.viewerPosX,
+                firstPoint.yCoord - moveFace - min - mc.renderManager.viewerPosY,
+                firstPoint.zCoord - mc.renderManager.viewerPosZ
+            )
+            GL11.glColor4f(1F, 1F, 1F, 0.7F * (i / 20F))
+
+            for (point in points) {
+                GL11.glVertex3d(
+                    point.xCoord - mc.renderManager.viewerPosX,
+                    point.yCoord - moveFace - min - mc.renderManager.viewerPosY,
+                    point.zCoord - mc.renderManager.viewerPosZ
+                )
+            }
+            GL11.glColor4f(0F, 0F, 0F, 0F)
+        }
+        GL11.glEnd()
+
+        GL11.glColor4f(1f, 1f, 1f, 1f)
+        GL11.glEnable(GL11.GL_DEPTH_TEST)
+        GL11.glDisable(GL11.GL_LINE_SMOOTH)
+        GL11.glDisable(GL11.GL_BLEND)
+        GL11.glEnable(GL11.GL_TEXTURE_2D)
+        GL11.glPopMatrix()
+    }
+
+    private fun drawLiesMark(entity: EntityLivingBase) {
+        val everyTime = 3000
+        val drawTime = (System.currentTimeMillis() % everyTime).toInt()
+        val drawMode = drawTime > everyTime / 2
+        var drawPercent = drawTime / (everyTime / 2.0)
+
+        if (!drawMode) drawPercent = 1 - drawPercent else drawPercent -= 1
+        drawPercent = EaseUtils.easeInOutQuad(drawPercent)
+
+        val box = entity.hitBox
+        val radius = ((box.maxX - box.minX) + (box.maxZ - box.minZ)) * 0.5f
+        val height = box.maxY - box.minY
+        val partialTicks = mc.timer.renderPartialTicks
+        val x = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks - mc.renderManager.viewerPosX
+        val y = entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks - mc.renderManager.viewerPosY + height * drawPercent
+        val z = entity.lastTickPosZ + (entity.posZ - entity.lastTickPosZ) * partialTicks - mc.renderManager.viewerPosZ
+
+        val eased = (height / 3) * (if (drawPercent > 0.5) 1 - drawPercent else drawPercent) * (if (drawMode) -1 else 1)
+
+        mc.entityRenderer.disableLightmap()
+        GL11.glPushMatrix()
+        GL11.glDisable(GL11.GL_TEXTURE_2D)
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA)
+        GL11.glEnable(GL11.GL_LINE_SMOOTH)
+        GL11.glEnable(GL11.GL_BLEND)
+        GL11.glDisable(GL11.GL_DEPTH_TEST)
+        GL11.glDisable(GL11.GL_CULL_FACE)
+        GL11.glShadeModel(GL11.GL_SMOOTH)
+
+        for (i in 5..360 step 5) {
+            val hue = if (i < 180) {
+                HUD.rainbowStartValue.get() + (HUD.rainbowStopValue.get() - HUD.rainbowStartValue.get()) * (i / 180f)
+            } else {
+                HUD.rainbowStartValue.get() + (HUD.rainbowStopValue.get() - HUD.rainbowStartValue.get()) * (-(i - 360) / 180f)
+            }
+            val color = Color.getHSBColor(hue, 0.7f, 1.0f)
+
+            val x1 = x - sin(i * Math.PI / 180F) * radius
+            val z1 = z + cos(i * Math.PI / 180F) * radius
+            val x2 = x - sin((i - 5) * Math.PI / 180F) * radius
+            val z2 = z + cos((i - 5) * Math.PI / 180F) * radius
+
+            GL11.glBegin(GL11.GL_QUADS)
+            GL11.glColor4f(color.red / 255f, color.green / 255f, color.blue / 255f, 0f)
+            GL11.glVertex3d(x1, y + eased, z1)
+            GL11.glVertex3d(x2, y + eased, z2)
+            GL11.glColor4f(color.red / 255f, color.green / 255f, color.blue / 255f, 0.59f)
+            GL11.glVertex3d(x2, y, z2)
+            GL11.glVertex3d(x1, y, z1)
+            GL11.glEnd()
+        }
+
+        GL11.glShadeModel(GL11.GL_FLAT)
+        GL11.glColor4f(1f, 1f, 1f, 1f)
+        GL11.glEnable(GL11.GL_CULL_FACE)
+        GL11.glEnable(GL11.GL_DEPTH_TEST)
+        GL11.glDisable(GL11.GL_LINE_SMOOTH)
+        GL11.glDisable(GL11.GL_BLEND)
+        GL11.glEnable(GL11.GL_TEXTURE_2D)
+        GL11.glPopMatrix()
     }
 
     private fun renderRangeIndicator() {
