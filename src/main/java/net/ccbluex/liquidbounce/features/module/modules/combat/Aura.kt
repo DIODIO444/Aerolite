@@ -38,8 +38,10 @@ import net.ccbluex.liquidbounce.utils.inventory.ItemUtils.isConsumingItem
 import net.ccbluex.liquidbounce.utils.inventory.SilentHotbar
 import net.ccbluex.liquidbounce.utils.kotlin.RandomUtils.nextInt
 import net.ccbluex.liquidbounce.utils.render.ColorSettingsInteger
+import net.ccbluex.liquidbounce.utils.render.Cylinder
 import net.ccbluex.liquidbounce.utils.render.EaseUtils
 import net.ccbluex.liquidbounce.utils.render.Render3D
+import net.ccbluex.liquidbounce.utils.render.RenderHelper
 import net.ccbluex.liquidbounce.utils.render.RenderUtils
 import net.ccbluex.liquidbounce.utils.rotation.RandomizationSettings
 import net.ccbluex.liquidbounce.utils.rotation.RaycastUtils.raycastEntity
@@ -439,7 +441,7 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
 
     // Target marks
     private val mark by choices(
-        "Mark", arrayOf("Off", "Liquid", "Block", "FDP", "Jello", "Lies"), "Off"
+        "Mark", arrayOf("Off", "Liquid", "Block", "FDP", "Jello", "Lies", "Sims"), "Off"
     ).subjective().describe("How valid targets are marked in the world.")
     private val blockMarkExpand by float("BlockMarkExpand", 0.1f, 0f..1f) { mark == "Block" }.subjective()
         .describe("Expand the block mark box by this amount.")
@@ -1577,6 +1579,8 @@ private fun updateHittable() {
                 "jello" -> drawJelloMark(entity)
 
                 "lies" -> drawLiesMark(entity)
+
+                "sims" -> drawSimsMark(entity)
             }
         }
     }
@@ -1727,6 +1731,42 @@ private fun updateHittable() {
         GL11.glDisable(GL11.GL_LINE_SMOOTH)
         GL11.glDisable(GL11.GL_BLEND)
         GL11.glEnable(GL11.GL_TEXTURE_2D)
+        GL11.glPopMatrix()
+    }
+
+    private fun drawSimsMark(entity: EntityLivingBase) {
+        val radius = 0.15f
+        val sides = 4
+        val partialTicks = mc.timer.renderPartialTicks
+
+        GL11.glPushMatrix()
+        GL11.glTranslated(
+            entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks - mc.renderManager.viewerPosX,
+            entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks - mc.renderManager.viewerPosY + entity.height * 1.1,
+            entity.lastTickPosZ + (entity.posZ - entity.lastTickPosZ) * partialTicks - mc.renderManager.viewerPosZ
+        )
+        GL11.glRotatef(-entity.width, 0.0f, 1.0f, 0.0f)
+        GL11.glRotatef((mc.thePlayer.ticksExisted + partialTicks) * 5, 0f, 1f, 0f)
+
+        val color = if (entity.hurtTime <= 0) Color(80, 255, 80) else Color(255, 0, 0)
+        GL11.glColor4f(color.red / 255f, color.green / 255f, color.blue / 255f, 1f)
+
+        RenderHelper.enableSmoothLine(1.5F)
+
+        val cylinder = Cylinder()
+        GL11.glRotatef(-90.0f, 1.0f, 0.0f, 0.0f)
+        cylinder.draw(0F, radius, 0.3f, sides, 1)
+        cylinder.drawStyle = 100012
+        GL11.glTranslated(0.0, 0.0, 0.3)
+        cylinder.draw(radius, 0f, 0.3f, sides, 1)
+        GL11.glRotatef(90.0f, 0.0f, 0.0f, 1.0f)
+        GL11.glTranslated(0.0, 0.0, -0.3)
+        cylinder.draw(0F, radius, 0.3f, sides, 1)
+        GL11.glTranslated(0.0, 0.0, 0.3)
+        cylinder.draw(radius, 0F, 0.3f, sides, 1)
+
+        RenderHelper.disableSmoothLine()
+        GL11.glColor4f(1f, 1f, 1f, 1f)
         GL11.glPopMatrix()
     }
 
