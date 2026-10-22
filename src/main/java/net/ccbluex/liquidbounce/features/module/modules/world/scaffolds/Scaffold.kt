@@ -5,6 +5,7 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.player.scaffolds
 
+import me.stars.utils.BlurUtilsOld
 import me.stars.utils.Renderer
 import net.ccbluex.liquidbounce.config.Configurable
 import net.ccbluex.liquidbounce.event.*
@@ -45,6 +46,8 @@ import net.minecraft.block.BlockBush
 import net.minecraft.client.entity.EntityPlayerSP
 import net.minecraft.client.settings.GameSettings
 import net.minecraft.init.Blocks.air
+import net.minecraft.client.renderer.GlStateManager
+import net.minecraft.client.renderer.RenderHelper
 import net.minecraft.item.ItemBlock
 import net.minecraft.item.ItemStack
 import net.minecraft.network.play.client.C0APacketAnimation
@@ -55,6 +58,7 @@ import net.minecraft.util.*
 import net.minecraft.world.WorldSettings
 import net.minecraftforge.event.ForgeEventFactory
 import org.lwjgl.input.Keyboard
+import org.lwjgl.opengl.GL11
 import java.awt.Color
 import kotlin.math.*
 import net.ccbluex.liquidbounce.config.boolean
@@ -355,8 +359,14 @@ object Scaffold : Module("Scaffold", Category.PLAYER, Category.SubCategory.PLAYE
     private val counter by boolean("Counter", false).subjective()
         .describe("Show the amount of blocks left on screen.")
     private val counterMode by choices(
-        "CounterMode", arrayOf("LBP", "Rounded", "Simple", "Drama"), "LBP"
+        "CounterMode",
+        arrayOf("LBP", "Rounded", "Simple", "Drama", "FDP", "Sigma", "Novoline", "Advanced"),
+        "LBP"
     ) { counter }.subjective().describe("Style of the block counter.")
+    private val counterBlur by boolean("CounterBlur", false) { counter && counterMode == "Advanced" }.subjective()
+        .describe("Blur the background of the advanced counter.")
+    private val counterBlurStrength by float("CounterBlurStrength", 1f, 0f..30f) { counterBlur }.subjective()
+        .describe("Blur radius of the advanced counter.")
     private val trackCPS by boolean("TrackCPS", false).subjective()
         .describe("Show the current placement clicks-per-second.")
 
@@ -414,7 +424,7 @@ object Scaffold : Module("Scaffold", Category.PLAYER, Category.SubCategory.PLAYE
             "SameY", "JumpOnUserInput", "SafeWalk", "AirSafe")
 
         moveValues(visualsGroup,
-            "Mark", "MarkRainbow", "TrackCPS", "Counter", "CounterMode")
+            "Mark", "MarkRainbow", "TrackCPS", "Counter", "CounterMode", "CounterBlur", "CounterBlurStrength")
 
         addValues(listOf(
             generalGroup, placementGroup, autoBlockGroup, modesGroup, godBridgeGroup, rotationsGroup,
@@ -1356,12 +1366,22 @@ object Scaffold : Module("Scaffold", Category.PLAYER, Category.SubCategory.PLAYE
     }
 
     // Visuals
+    private var counterStart = 0L
+
     val onRender2D = handler<Render2DEvent> {
         if (!counter) return@handler
+
+        if (counterStart == 0L) counterStart = System.currentTimeMillis()
+
+        val progress = ((System.currentTimeMillis() - counterStart) / 100f).coerceIn(0f, 1f)
 
         val scaledResolution = it.scaledResolution
         val amount = blocksAmount()
         val text = "$amount blocks"
+
+        val hotbarSlot = InventoryUtils.findBlockInHotbar() ?: -1
+        val stack = if (hotbarSlot in 0..8) mc.thePlayer?.inventory?.mainInventory?.getOrNull(hotbarSlot) else null
+        val blockStack = stack?.takeIf { it.item is ItemBlock }
 
         when (counterMode) {
             "Simple" -> {
@@ -1400,6 +1420,117 @@ object Scaffold : Module("Scaffold", Category.PLAYER, Category.SubCategory.PLAYE
                 )
             }
 
+            "FDP" -> {
+                val infoWidth = Fonts.gs40.getStringWidth(text)
+                val width = scaledResolution.scaledWidth
+                val height = scaledResolution.scaledHeight
+
+                RenderUtils.drawRoundedCornerRect(
+                    (width - infoWidth - 20) / 2f,
+                    height * 0.8f - 24f,
+                    (width + infoWidth + 18) / 2f,
+                    height * 0.8f + 12f,
+                    3f,
+                    Color(43, 45, 48).rgb
+                )
+                Fonts.font40.drawCenteredString("▼", width / 2f + 2f, height * 0.8f + 8f, Color(43, 45, 48).rgb)
+
+                if (blockStack != null) {
+                    RenderHelper.enableGUIStandardItemLighting()
+                    mc.renderItem.renderItemIntoGUI(blockStack, width / 2 - 10, (height * 0.8f - 20).toInt())
+                    RenderHelper.disableStandardItemLighting()
+                }
+
+                Fonts.gs40.drawCenteredString(text, width / 2f, height * 0.8f, Color.WHITE.rgb, false)
+            }
+
+            "Sigma" -> {
+                val infoWidth = Fonts.gs35.getStringWidth(text)
+                val centerX = scaledResolution.scaledWidth / 2
+                val bottomY = scaledResolution.scaledHeight - 60
+
+                GL11.glEnable(GL11.GL_BLEND)
+                GL11.glDisable(GL11.GL_TEXTURE_2D)
+                GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA)
+                GL11.glEnable(GL11.GL_LINE_SMOOTH)
+                GL11.glColor4f(0.15f, 0.15f, 0.15f, progress)
+                GL11.glBegin(GL11.GL_TRIANGLE_FAN)
+                GL11.glVertex2d((centerX - 3).toDouble(), bottomY.toDouble())
+                GL11.glVertex2d(centerX.toDouble(), (bottomY + 3).toDouble())
+                GL11.glVertex2d((centerX + 3).toDouble(), bottomY.toDouble())
+                GL11.glEnd()
+                GL11.glEnable(GL11.GL_TEXTURE_2D)
+                GL11.glDisable(GL11.GL_BLEND)
+                GL11.glDisable(GL11.GL_LINE_SMOOTH)
+
+                RenderUtils.drawRoundedCornerRect(
+                    centerX - infoWidth / 2f - 4f,
+                    bottomY.toFloat(),
+                    centerX + infoWidth / 2f + 4f,
+                    (bottomY - 14).toFloat(),
+                    2f,
+                    Color(0.15f, 0.15f, 0.15f, progress).rgb
+                )
+                GlStateManager.resetColor()
+                Fonts.gs35.drawCenteredString(
+                    text, centerX + 0.1f, (bottomY - 10).toFloat(), Color(1f, 1f, 1f, 0.8f * progress).rgb, false
+                )
+            }
+
+            "Novoline" -> {
+                if (blockStack != null) {
+                    GlStateManager.pushMatrix()
+                    GlStateManager.translate(
+                        scaledResolution.scaledWidth / 2f - 22f,
+                        scaledResolution.scaledHeight / 2f + 16f,
+                        scaledResolution.scaledWidth / 2f - 22f
+                    )
+                    renderItemStack(blockStack, 0, 0)
+                    GlStateManager.popMatrix()
+                }
+                GlStateManager.resetColor()
+
+                Fonts.minecraftFont.drawString(
+                    text,
+                    scaledResolution.scaledWidth / 2f,
+                    scaledResolution.scaledHeight / 2f + 20f,
+                    -1,
+                    true
+                )
+            }
+
+            "Advanced" -> {
+                val infoWidth = Fonts.gs40.getStringWidth(text)
+                val centerX = scaledResolution.scaledWidth / 2f
+                val halfHeight = scaledResolution.scaledHeight / 2f
+
+                val left = centerX - infoWidth / 2f - 4f
+                val right = centerX + infoWidth / 2f + 4f
+
+                if (counterBlur) {
+                    BlurUtilsOld.blurArea(
+                        left, halfHeight - 39f, right,
+                        halfHeight - if (blockStack != null) 5f else 26f,
+                        counterBlurStrength
+                    )
+                }
+
+                RenderUtils.drawRect(left, halfHeight - 40f, right, halfHeight - 39f, if (amount > 1) -0x1 else -0xeff0)
+                RenderUtils.drawRect(left, halfHeight - 39f, right, halfHeight - 26f, -0x60000000)
+
+                if (blockStack != null) {
+                    RenderUtils.drawRect(left, halfHeight - 26f, right, halfHeight - 5f, -0x60000000)
+
+                    GlStateManager.pushMatrix()
+                    GlStateManager.translate(centerX - 8f, halfHeight - 25f, centerX - 8f)
+                    renderItemStack(blockStack, 0, 0)
+                    GlStateManager.popMatrix()
+                }
+                GlStateManager.resetColor()
+
+                Fonts.gs40.drawCenteredString(text, centerX, halfHeight - 36f, -1)
+            }
+
             else -> {
                 val width = Fonts.font35.getStringWidth(text)
                 val left = scaledResolution.scaledWidth / 2f - width / 2f - 4f
@@ -1413,6 +1544,20 @@ object Scaffold : Module("Scaffold", Category.PLAYER, Category.SubCategory.PLAYE
                 )
             }
         }
+    }
+
+    private fun renderItemStack(stack: ItemStack, x: Int, y: Int) {
+        GlStateManager.pushMatrix()
+        GlStateManager.enableRescaleNormal()
+        GlStateManager.enableBlend()
+        GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0)
+        RenderHelper.enableGUIStandardItemLighting()
+        mc.renderItem.renderItemAndEffectIntoGUI(stack, x, y)
+        mc.renderItem.renderItemOverlays(mc.fontRendererObj, stack, x, y)
+        RenderHelper.disableStandardItemLighting()
+        GlStateManager.disableRescaleNormal()
+        GlStateManager.disableBlend()
+        GlStateManager.popMatrix()
     }
 
     val onRender3D = handler<Render3DEvent> {
