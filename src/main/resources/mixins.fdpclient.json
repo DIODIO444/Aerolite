@@ -76,6 +76,7 @@
     "entity.MixinPlayerControllerMP",
     "forge.MixinGuiIngameForge",
     "gui.MixinGui",
+    "gui.MixinGuiContainerAccessor",
     "gui.MixinGuiButton",
     "gui.MixinGuiButtonExt",
     "gui.MixinGuiChat",

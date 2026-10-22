@@ -6,7 +6,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.player
 
 import kotlinx.coroutines.delay
-import net.ccbluex.liquidbounce.config.*
+import net.ccbluex.liquidbounce.config.Configurable
 import net.ccbluex.liquidbounce.config.ListValue
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
@@ -37,6 +37,10 @@ import net.minecraft.init.Blocks
 import net.minecraft.init.Items
 import net.minecraft.item.*
 import net.minecraft.potion.Potion
+import net.ccbluex.liquidbounce.config.boolean
+import net.ccbluex.liquidbounce.config.choices
+import net.ccbluex.liquidbounce.config.int
+import net.ccbluex.liquidbounce.config.intRange
 
 object InventoryCleaner : Module("InventoryCleaner", Category.PLAYER, Category.SubCategory.PLAYER_ASSIST) {
     private val drop by boolean("Drop", true).subjective()
@@ -955,15 +959,14 @@ object InventoryCleaner : Module("InventoryCleaner", Category.PLAYER, Category.S
 
         // Count arrow items in stacks that take priority over this one
         val betterCount = stacks.withIndex().sumOf { (otherIndex, otherStack) ->
-            val other = otherStack ?: return@sumOf 0
-            if (other == stack || other.item != Items.arrow)
+            if (otherStack == null || otherStack == stack || otherStack.item != Items.arrow)
                 return@sumOf 0
 
-            val isOtherSorted = canBeSortedTo(otherIndex, other.item, stacks.size)
+            val isOtherSorted = canBeSortedTo(otherIndex, otherStack.item, stacks.size)
 
             // A different stack takes priority when it's sorted (and this one isn't) or sits lower in the inventory
             if ((isOtherSorted && !isSorted) || (isOtherSorted == isSorted && otherIndex < index))
-                other.stackSize
+                otherStack.stackSize
             else
                 0
         }

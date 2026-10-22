@@ -17,6 +17,7 @@ object Category {
     val CLIENT: ModuleCategory = ModuleCategory.CLIENT
     val WORLD: ModuleCategory = ModuleCategory.WORLD
     val MISC: ModuleCategory = ModuleCategory.MISC
+    val OTHER: ModuleCategory = ModuleCategory.MISC
 
     enum class SubCategory(val displayName: String, val icon: String) {
         NONE("", ""),

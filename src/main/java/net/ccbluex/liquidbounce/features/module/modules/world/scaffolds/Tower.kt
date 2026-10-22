@@ -5,7 +5,7 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.player.scaffolds
 
-import net.ccbluex.liquidbounce.config.*
+import net.ccbluex.liquidbounce.config.ConfigurableImpl
 import net.ccbluex.liquidbounce.event.*
 import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
 import net.ccbluex.liquidbounce.features.module.modules.movement.Speed
@@ -26,10 +26,12 @@ import net.minecraft.util.BlockPos
 import kotlin.math.truncate
 import kotlin.math.round
 import java.util.concurrent.ThreadLocalRandom
+import net.ccbluex.liquidbounce.config.boolean
+import net.ccbluex.liquidbounce.config.choices
+import net.ccbluex.liquidbounce.config.float
+import net.ccbluex.liquidbounce.config.int
 
 object Tower : ConfigurableImpl("Tower"), MinecraftInstance, Listenable {
-
-    override fun handleEvents() = Scaffold.handleEvents()
 
     val towerModeValues = choices(
         "TowerMode",
@@ -359,4 +361,5 @@ object Tower : ConfigurableImpl("Tower"), MinecraftInstance, Listenable {
         }
     }
 
+    override fun handleEvents() = Scaffold.handleEvents()
 }

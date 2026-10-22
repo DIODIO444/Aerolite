@@ -46,14 +46,14 @@ public abstract class MixinGuiContainer extends MixinGuiScreen {
         ChestStealer chestStealer = LiquidBounce.moduleManager.getModule(ChestStealer.class);
         Minecraft mc = Minecraft.getMinecraft();
         GuiScreen guiScreen = mc.currentScreen;
-        if (chestStealer.getState() && chestStealer.getSilentValue() && guiScreen instanceof GuiChest) {
+        if (chestStealer.getState() && chestStealer.getSilentGUI() && guiScreen instanceof GuiChest) {
             GuiChest chest = (GuiChest) guiScreen;
-            if (!(chestStealer.getChestTitleValue() && (chest.lowerChestInventory == null || !chest.lowerChestInventory.getName().contains(new ItemStack(Item.itemRegistry.getObject(new ResourceLocation("minecraft:chest"))).getDisplayName())))) {
+            if (!(chestStealer.getChestTitle() && (chest.lowerChestInventory == null || !chest.lowerChestInventory.getName().contains(new ItemStack(Item.itemRegistry.getObject(new ResourceLocation("minecraft:chest"))).getDisplayName())))) {
                 // mouse focus
                 mc.setIngameFocus();
                 mc.currentScreen = guiScreen;
                 // hide GUI
-                if (chestStealer.getSilentTitleValue()) {
+                if (chestStealer.getSilentView()) {
                     RendererExtensionKt.drawCenteredString(mc.fontRendererObj, "%ui.chest.stealing%", width / 2, (height / 2) + 30, ColorUtils.INSTANCE.rainbow().getRGB(), false);
                 }
                 callbackInfo.cancel();
@@ -99,7 +99,7 @@ public abstract class MixinGuiContainer extends MixinGuiScreen {
     @Inject(method = "keyTyped", at = @At("HEAD"))
     private void keyTyped(char typedChar, int keyCode, CallbackInfo ci) {
         ChestStealer chestStealer = LiquidBounce.moduleManager.getModule(ChestStealer.class);
-        if (chestStealer.getState() && chestStealer.getSilentTitleValue() && mc.currentScreen instanceof GuiChest)
+        if (chestStealer.getState() && chestStealer.getSilentView() && mc.currentScreen instanceof GuiChest)
             LiquidBounce.eventManager.callEvent(new KeyEvent(keyCode == 0 ? typedChar + 256 : keyCode));
     }
 }

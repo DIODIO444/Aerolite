@@ -5,12 +5,14 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.player.scaffolds
 
-import net.ccbluex.liquidbounce.config.*
+import me.stars.utils.Renderer
+import net.ccbluex.liquidbounce.config.Configurable
 import net.ccbluex.liquidbounce.event.*
 import net.ccbluex.liquidbounce.event.async.TickScheduler
 import net.ccbluex.liquidbounce.event.async.loopSequence
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
+import net.ccbluex.liquidbounce.ui.font.Fonts
 import net.ccbluex.liquidbounce.utils.attack.CPSCounter
 import net.ccbluex.liquidbounce.utils.block.*
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
@@ -23,6 +25,7 @@ import net.ccbluex.liquidbounce.utils.inventory.hotBarSlot
 import net.ccbluex.liquidbounce.utils.kotlin.RandomUtils
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils
 import net.ccbluex.liquidbounce.utils.movement.projectedVanillaJumpHeight
+import net.ccbluex.liquidbounce.utils.render.ColorUtils
 import net.ccbluex.liquidbounce.utils.render.RenderUtils
 import net.ccbluex.liquidbounce.utils.rotation.PlaceRotation
 import net.ccbluex.liquidbounce.utils.rotation.Rotation
@@ -54,6 +57,12 @@ import net.minecraftforge.event.ForgeEventFactory
 import org.lwjgl.input.Keyboard
 import java.awt.Color
 import kotlin.math.*
+import net.ccbluex.liquidbounce.config.boolean
+import net.ccbluex.liquidbounce.config.choices
+import net.ccbluex.liquidbounce.config.float
+import net.ccbluex.liquidbounce.config.floatRange
+import net.ccbluex.liquidbounce.config.int
+import net.ccbluex.liquidbounce.config.intRange
 
 object Scaffold : Module("Scaffold", Category.PLAYER, Category.SubCategory.PLAYER_ASSIST,Keyboard.KEY_V) {
 
@@ -341,6 +350,13 @@ object Scaffold : Module("Scaffold", Category.PLAYER, Category.SubCategory.PLAYE
     // Visuals
     private val mark by boolean("Mark", false).subjective()
         .describe("Highlight the block about to be placed.")
+    private val markRainbow by boolean("MarkRainbow", false) { mark }.subjective()
+        .describe("Draw the mark with a rainbow colour.")
+    private val counter by boolean("Counter", false).subjective()
+        .describe("Show the amount of blocks left on screen.")
+    private val counterMode by choices(
+        "CounterMode", arrayOf("LBP", "Rounded", "Simple", "Drama"), "LBP"
+    ) { counter }.subjective().describe("Style of the block counter.")
     private val trackCPS by boolean("TrackCPS", false).subjective()
         .describe("Show the current placement clicks-per-second.")
 
@@ -398,7 +414,7 @@ object Scaffold : Module("Scaffold", Category.PLAYER, Category.SubCategory.PLAYE
             "SameY", "JumpOnUserInput", "SafeWalk", "AirSafe")
 
         moveValues(visualsGroup,
-            "Mark", "TrackCPS")
+            "Mark", "MarkRainbow", "TrackCPS", "Counter", "CounterMode")
 
         addValues(listOf(
             generalGroup, placementGroup, autoBlockGroup, modesGroup, godBridgeGroup, rotationsGroup,
@@ -1332,12 +1348,73 @@ object Scaffold : Module("Scaffold", Category.PLAYER, Category.SubCategory.PLAYE
     val jumpHandler = handler<JumpEvent> { event ->
         if (!jumpStrafe) return@handler
 
-        MovementUtils.strafe(
-            (if (!isLookingDiagonally) jumpStraightStrafe else jumpDiagonalStrafe).random()
-        )
+        if (event.eventState == EventState.POST) {
+            MovementUtils.strafe(
+                (if (!isLookingDiagonally) jumpStraightStrafe else jumpDiagonalStrafe).random()
+            )
+        }
     }
 
     // Visuals
+    val onRender2D = handler<Render2DEvent> {
+        if (!counter) return@handler
+
+        val scaledResolution = it.scaledResolution
+        val amount = blocksAmount()
+        val text = "$amount blocks"
+
+        when (counterMode) {
+            "Simple" -> {
+                val font = Fonts.minecraftFont
+                val label = amount.toString()
+
+                font.drawStringWithShadow(
+                    label,
+                    scaledResolution.scaledWidth / 2f - font.getStringWidth(label) / 2f,
+                    scaledResolution.scaledHeight / 2f - 36f,
+                    -1
+                )
+            }
+
+            "Rounded" -> {
+                val width = Fonts.font35.getStringWidth(text)
+                val left = scaledResolution.scaledWidth / 2f - width / 2f - 10f
+                val right = scaledResolution.scaledWidth / 2f + width / 2f + 10f
+                val top = scaledResolution.scaledHeight - 77f
+                val bottom = scaledResolution.scaledHeight - 57f
+
+                RenderUtils.drawRoundedCornerRect(left, top, right, bottom, 2.5f, Color(64, 64, 64, 200).rgb)
+                Fonts.font35.drawCenteredString(
+                    text, scaledResolution.scaledWidth / 2f + 0.1f, top + 6f, Color(255, 255, 255, 220).rgb, false
+                )
+            }
+
+            "Drama" -> {
+                val x = scaledResolution.scaledWidth / 2f
+                val y = scaledResolution.scaledHeight * 0.8f
+
+                RenderUtils.drawCircle(x, y, 18f, Color(40, 40, 40, 170).rgb)
+                Renderer.drawCircleBorder(x, y, 18f, Color(255, 40, 255, 255).rgb, 4f)
+                Fonts.font40.drawCenteredString(
+                    amount.toString(), x + 1.5f, y + 5f, Color(255, 255, 255, 180).rgb, false
+                )
+            }
+
+            else -> {
+                val width = Fonts.font35.getStringWidth(text)
+                val left = scaledResolution.scaledWidth / 2f - width / 2f - 4f
+                val right = scaledResolution.scaledWidth / 2f + width / 2f + 4f
+                val top = scaledResolution.scaledHeight - 74f
+                val bottom = scaledResolution.scaledHeight - 60f
+
+                RenderUtils.drawRoundedCornerRect(left, top, right, bottom, 2.5f, Color(64, 64, 64, 200).rgb)
+                Fonts.font35.drawCenteredString(
+                    text, scaledResolution.scaledWidth / 2f + 0.1f, top + 4f, Color(255, 255, 255, 220).rgb, false
+                )
+            }
+        }
+    }
+
     val onRender3D = handler<Render3DEvent> {
         val player = mc.thePlayer ?: return@handler
 
@@ -1376,7 +1453,7 @@ object Scaffold : Module("Scaffold", Category.PLAYER, Category.SubCategory.PLAYE
             val placeInfo = PlaceInfo.get(blockPos)
 
             if (blockPos.isReplaceable && placeInfo != null) {
-                RenderUtils.drawBlockBox(blockPos, Color(68, 117, 255, 100), false, true, 1f)
+                RenderUtils.drawBlockBox(blockPos, if (markRainbow) ColorUtils.rainbow() else Color(68, 117, 255, 100), true, true, 2f)
                 return@handler
             }
         }

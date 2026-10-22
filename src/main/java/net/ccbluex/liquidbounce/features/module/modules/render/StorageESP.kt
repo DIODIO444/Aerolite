@@ -34,8 +34,8 @@ class StorageESP : Module() {
     private val hopperValue = BoolValue("Hopper", true)
 
     private fun getColor(tileEntity: TileEntity): Color? {
-        if (chestValue.get() && tileEntity is TileEntityChest && !ChestAura.clickedBlocks.contains(tileEntity.getPos())) return Color(0, 66, 255)
-        if (enderChestValue.get() && tileEntity is TileEntityEnderChest && !ChestAura.clickedBlocks.contains(tileEntity.getPos())) return Color.MAGENTA
+        if (chestValue.get() && tileEntity is TileEntityChest && !ChestAura.clickedTileEntities.none { it.pos == tileEntity.pos }) return Color(0, 66, 255)
+        if (enderChestValue.get() && tileEntity is TileEntityEnderChest && !ChestAura.clickedTileEntities.none { it.pos == tileEntity.pos }) return Color.MAGENTA
         if (furnaceValue.get() && tileEntity is TileEntityFurnace) return Color.BLACK
         if (dispenserValue.get() && tileEntity is TileEntityDispenser) return Color.BLACK
         if (hopperValue.get() && tileEntity is TileEntityHopper) return Color.GRAY
