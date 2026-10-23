@@ -11,7 +11,7 @@ import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.features.module.modules.combat.SuperKnockback
-import net.ccbluex.liquidbounce.features.module.modules.player.scaffolds.Scaffold
+import net.ccbluex.liquidbounce.features.module.modules.world.BlockFly
 import net.ccbluex.liquidbounce.utils.extensions.isMoving
 import net.ccbluex.liquidbounce.utils.extensions.setSprintSafely
 import net.ccbluex.liquidbounce.utils.inventory.InventoryUtils.serverOpenInventory
@@ -87,8 +87,8 @@ object Sprint : Module("Sprint", Category.MOVEMENT, Category.SubCategory.MOVEMEN
 
     fun correctSprintState(movementInput: MovementInput, isUsingItem: Boolean) {
         val player = mc.thePlayer ?: return
-        val scaffoldActive = Scaffold.handleEvents()
-        val scaffoldControlsSprint = scaffoldActive && Scaffold.sprint
+        val scaffoldActive = BlockFly.handleEvents()
+        val scaffoldControlsSprint = scaffoldActive && BlockFly.sprint
 
         if (SuperKnockback.breakSprint()) {
             player setSprintSafely false
@@ -96,19 +96,19 @@ object Sprint : Module("Sprint", Category.MOVEMENT, Category.SubCategory.MOVEMEN
         }
 
         if (scaffoldActive) {
-            if (!Scaffold.sprint) {
+            if (!BlockFly.sprint) {
                 player setSprintSafely false
                 isSprinting = false
                 return
             }
 
-            if (!Scaffold.canSprint) {
+            if (!BlockFly.canSprint) {
                 player setSprintSafely false
                 isSprinting = false
                 return
             }
 
-            if (Scaffold.eagle == "Normal" && player.isMoving && player.onGround && Scaffold.eagleSneaking && Scaffold.eagleSprint) {
+            if (BlockFly.eagle == "Normal" && player.isMoving && player.onGround && BlockFly.eagleSneaking && BlockFly.eagleSprint) {
                 player setSprintSafely true
                 isSprinting = true
                 return
@@ -131,7 +131,7 @@ object Sprint : Module("Sprint", Category.MOVEMENT, Category.SubCategory.MOVEMEN
         if (!handleEvents() || onlyOnSprintPress && !player.isSprinting && !mc.gameSettings.keyBindSprint.isKeyDown && !SuperKnockback.startSprint() && !isSprinting)
             return
 
-        val ignoreDirectionCheck = Scaffold.handleEvents() && Scaffold.sprint && Scaffold.canSprint && mode == "Vanilla"
+        val ignoreDirectionCheck = BlockFly.handleEvents() && BlockFly.sprint && BlockFly.canSprint && mode == "Vanilla"
 
         if (handleEvents() || alwaysCorrect) {
             player setSprintSafely !shouldStopSprinting(movementInput, isUsingItem, ignoreDirectionCheck)

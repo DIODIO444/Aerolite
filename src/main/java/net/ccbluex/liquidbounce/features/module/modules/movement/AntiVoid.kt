@@ -10,8 +10,8 @@ import net.ccbluex.liquidbounce.event.async.TickScheduler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.features.module.modules.player.Blink
-import net.ccbluex.liquidbounce.features.module.modules.player.scaffolds.Scaffold
-import net.ccbluex.liquidbounce.features.module.modules.player.scaffolds.Tower
+import net.ccbluex.liquidbounce.features.module.modules.world.BlockFly
+import net.ccbluex.liquidbounce.features.module.modules.world.scaffolds.Tower
 import net.ccbluex.liquidbounce.utils.block.block
 import net.ccbluex.liquidbounce.utils.client.BlinkUtils
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
@@ -213,7 +213,7 @@ object AntiVoid : Module("AntiVoid", Category.MOVEMENT, Category.SubCategory.MOV
             }
 
             // Check for scaffold
-            if ((Scaffold.handleEvents() || Tower.handleEvents()) && Scaffold.placeRotation != null) {
+            if ((BlockFly.handleEvents() || Tower.handleEvents()) && BlockFly.placeRotation != null) {
                 if (BlinkUtils.isBlinking && player.fallDistance < 1.5f) BlinkUtils.unblink()
                 if (pauseTicks < ticksToDelay) pauseTicks = ticksToDelay
             }

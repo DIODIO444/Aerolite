@@ -3,14 +3,15 @@
  * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge.
  * https://github.com/SkidderMC/FDPClient/
  */
-package net.ccbluex.liquidbounce.features.module.modules.player.scaffolds
+package net.ccbluex.liquidbounce.features.module.modules.world.scaffolds
 
 import net.ccbluex.liquidbounce.config.ConfigurableImpl
 import net.ccbluex.liquidbounce.event.*
 import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
 import net.ccbluex.liquidbounce.features.module.modules.movement.Speed
-import net.ccbluex.liquidbounce.features.module.modules.player.scaffolds.Scaffold.searchMode
-import net.ccbluex.liquidbounce.features.module.modules.player.scaffolds.Scaffold.shouldGoDown
+import net.ccbluex.liquidbounce.features.module.modules.world.BlockFly
+import net.ccbluex.liquidbounce.features.module.modules.world.BlockFly.searchMode
+import net.ccbluex.liquidbounce.features.module.modules.world.BlockFly.shouldGoDown
 import net.ccbluex.liquidbounce.utils.block.block
 import net.ccbluex.liquidbounce.utils.client.MinecraftInstance
 import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPackets
@@ -111,7 +112,7 @@ object Tower : ConfigurableImpl("Tower"), MinecraftInstance, Listenable {
         isTowering = false
 
         if (towerModeValues.get() != "Karhu" && karhuTimerActive) {
-            mc.timer.timerSpeed = Scaffold.timer
+            mc.timer.timerSpeed = BlockFly.timer
             karhuTimerActive = false
         }
 
@@ -119,7 +120,7 @@ object Tower : ConfigurableImpl("Tower"), MinecraftInstance, Listenable {
             onJumpValues.get() && !mc.gameSettings.keyBindJump.isKeyDown
         ) {
             if (karhuTimerActive) {
-                mc.timer.timerSpeed = Scaffold.timer
+                mc.timer.timerSpeed = BlockFly.timer
                 karhuTimerActive = false
             }
             return@handler
@@ -137,7 +138,7 @@ object Tower : ConfigurableImpl("Tower"), MinecraftInstance, Listenable {
             val blockPos = BlockPos(player).down()
 
             if (blockPos.block == air) {
-                Scaffold.search(blockPos, !shouldGoDown, searchMode == "Area")
+                BlockFly.search(blockPos, !shouldGoDown, searchMode == "Area")
             }
         }
     }
@@ -147,7 +148,7 @@ object Tower : ConfigurableImpl("Tower"), MinecraftInstance, Listenable {
         val player = mc.thePlayer ?: return@handler
 
         if (onJumpValues.get()) {
-            if (Scaffold.scaffoldMode == "GodBridge" && (Scaffold.jumpAutomatically) || !Scaffold.shouldJumpOnInput)
+            if (BlockFly.scaffoldMode == "GodBridge" && (BlockFly.jumpAutomatically) || !BlockFly.shouldJumpOnInput)
                 return@handler
             if (towerModeValues.get() == "None" || towerModeValues.get() == "Jump")
                 return@handler
@@ -271,7 +272,7 @@ object Tower : ConfigurableImpl("Tower"), MinecraftInstance, Listenable {
 
             "karhu" -> {
                 if (player.onGround) {
-                    mc.timer.timerSpeed = Scaffold.timer
+                    mc.timer.timerSpeed = BlockFly.timer
                     karhuTimerActive = false
                     fakeJump()
                     player.motionY = 0.42
@@ -361,5 +362,5 @@ object Tower : ConfigurableImpl("Tower"), MinecraftInstance, Listenable {
         }
     }
 
-    override fun handleEvents() = Scaffold.handleEvents()
+    override fun handleEvents() = BlockFly.handleEvents()
 }

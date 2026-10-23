@@ -7,7 +7,7 @@ package net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.mat
 
 import net.ccbluex.liquidbounce.features.module.modules.movement.Speed
 import net.ccbluex.liquidbounce.features.module.modules.movement.speedmodes.SpeedMode
-import net.ccbluex.liquidbounce.features.module.modules.player.scaffolds.Scaffold
+import net.ccbluex.liquidbounce.features.module.modules.world.BlockFly
 import net.ccbluex.liquidbounce.utils.extensions.isInLiquid
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils.speed
 import net.ccbluex.liquidbounce.utils.movement.MovementUtils.strafe
@@ -23,10 +23,10 @@ object MatrixHop : SpeedMode("MatrixHop") {
 
         if (player.isMoving) {
             if (player.onGround) {
-                strafe(if (!Scaffold.handleEvents()) speed + Speed.extraGroundBoost else speed)
+                strafe(if (!BlockFly.handleEvents()) speed + Speed.extraGroundBoost else speed)
                 player.motionY = 0.42 - if (Speed.matrixLowHop) 3.48E-3 else 0.0
             } else {
-                if (!Scaffold.handleEvents() && speed < 0.19) {
+                if (!BlockFly.handleEvents() && speed < 0.19) {
                     strafe()
                 }
             }

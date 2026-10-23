@@ -16,7 +16,8 @@ import net.ccbluex.liquidbounce.features.module.modules.player.Blink
 import net.ccbluex.liquidbounce.features.module.modules.client.HUD
 import net.ccbluex.liquidbounce.features.module.modules.world.Fucker
 import net.ccbluex.liquidbounce.features.module.modules.other.Nuker
-import net.ccbluex.liquidbounce.features.module.modules.player.scaffolds.*
+import net.ccbluex.liquidbounce.features.module.modules.world.BlockFly
+import net.ccbluex.liquidbounce.features.module.modules.world.scaffolds.Tower
 import net.ccbluex.liquidbounce.ui.client.hud.element.elements.Text
 import net.ccbluex.liquidbounce.ui.font.Fonts
 import net.ccbluex.liquidbounce.utils.*
@@ -198,7 +199,7 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
     private val postRotationAttack by boolean("PostRotationAttack", false)
         .describe("Attack only after the rotation reaches the target.")
     private val noScaffold by boolean("NoScaffold", false)
-        .describe("Disable the aura while Scaffold is on.")
+        .describe("Disable the aura while BlockFly is on.")
     private val noFly by boolean("NoFly", false)
         .describe("Disable the aura while Flight is on.")
     private val noEat by boolean("NoEat", false)
@@ -1486,7 +1487,7 @@ private fun updateHittable() {
     }
 
     private fun shouldPrioritize(): Boolean = when {
-        !onScaffold && (Scaffold.handleEvents() && (Scaffold.placeRotation != null || currentRotation != null) || Tower.handleEvents() && Tower.isTowering) -> true
+        !onScaffold && (BlockFly.handleEvents() && (BlockFly.placeRotation != null || currentRotation != null) || Tower.handleEvents() && Tower.isTowering) -> true
 
         !onDestroyBlock && (Fucker.handleEvents() && !Fucker.noHit && Fucker.pos != null && !Fucker.isOwnBed || Nuker.handleEvents()) -> true
 
@@ -1957,7 +1958,7 @@ private fun updateHittable() {
 
     private fun shouldCancelDueToModuleState(): Boolean {
         return (blinkCheck && FDPClient.moduleManager[Blink::class.java.simpleName]?.state == true)
-                || (noScaffold && FDPClient.moduleManager[Scaffold::class.java.simpleName]?.state == true)
+                || (noScaffold && FDPClient.moduleManager[BlockFly::class.java.simpleName]?.state == true)
                 || (noFly && FDPClient.moduleManager[Flight::class.java.simpleName]?.state == true)
                 || (onSwording && mc.thePlayer.heldItem?.item !is ItemSword)
     }

@@ -1,1175 +1,1548 @@
 /*
  * FDPClient Hacked Client
- * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge by LiquidBounce.
- * https://github.com/UnlegitMC/FDPClient/
+ * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge.
+ * https://github.com/SkidderMC/FDPClient/
  */
 package net.ccbluex.liquidbounce.features.module.modules.world
 
 import me.stars.utils.BlurUtilsOld
 import me.stars.utils.Renderer
-import net.ccbluex.liquidbounce.LiquidBounce
+import net.ccbluex.liquidbounce.config.Configurable
 import net.ccbluex.liquidbounce.event.*
+import net.ccbluex.liquidbounce.event.async.TickScheduler
+import net.ccbluex.liquidbounce.event.async.loopSequence
+import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
-import net.ccbluex.liquidbounce.features.module.ModuleCategory
-import net.ccbluex.liquidbounce.features.module.ModuleInfo
-import net.ccbluex.liquidbounce.features.module.modules.movement.Speed
-import net.ccbluex.liquidbounce.features.module.modules.movement.StrafeFix
-import net.ccbluex.liquidbounce.injection.access.StaticStorage
-import net.ccbluex.liquidbounce.ui.client.hud.element.elements.Notification
-import net.ccbluex.liquidbounce.ui.client.hud.element.elements.NotifyType
+import net.ccbluex.liquidbounce.features.module.modules.world.scaffolds.Tower
 import net.ccbluex.liquidbounce.ui.font.Fonts
-import net.ccbluex.liquidbounce.utils.*
-import net.ccbluex.liquidbounce.utils.block.BlockUtils
-import net.ccbluex.liquidbounce.utils.block.PlaceInfo
-import net.ccbluex.liquidbounce.utils.block.PlaceInfo.Companion.get
-import net.ccbluex.liquidbounce.utils.extensions.rayTraceWithServerSideRotation
-import net.ccbluex.liquidbounce.utils.misc.RandomUtils
+import net.ccbluex.liquidbounce.utils.attack.CPSCounter
+import net.ccbluex.liquidbounce.utils.block.*
+import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
+import net.ccbluex.liquidbounce.utils.client.ClientUtils.LOGGER
+import net.ccbluex.liquidbounce.utils.extensions.*
+import net.ccbluex.liquidbounce.utils.inventory.InventoryUtils
+import net.ccbluex.liquidbounce.utils.inventory.InventoryUtils.blocksAmount
+import net.ccbluex.liquidbounce.utils.inventory.SilentHotbar
+import net.ccbluex.liquidbounce.utils.inventory.hotBarSlot
+import net.ccbluex.liquidbounce.utils.kotlin.RandomUtils
+import net.ccbluex.liquidbounce.utils.movement.MovementUtils
+import net.ccbluex.liquidbounce.utils.movement.projectedVanillaJumpHeight
+import net.ccbluex.liquidbounce.utils.render.ColorUtils
 import net.ccbluex.liquidbounce.utils.render.RenderUtils
-import net.ccbluex.liquidbounce.utils.timer.MSTimer
-import net.ccbluex.liquidbounce.utils.timer.TickTimer
-import net.ccbluex.liquidbounce.utils.timer.TimeUtils
-import net.ccbluex.liquidbounce.value.BoolValue
-import net.ccbluex.liquidbounce.value.FloatValue
-import net.ccbluex.liquidbounce.value.IntegerValue
-import net.ccbluex.liquidbounce.value.ListValue
-import net.minecraft.block.BlockAir
-import net.minecraft.client.gui.ScaledResolution
+import net.ccbluex.liquidbounce.utils.rotation.PlaceRotation
+import net.ccbluex.liquidbounce.utils.rotation.Rotation
+import net.ccbluex.liquidbounce.utils.rotation.RotationPriority
+import net.ccbluex.liquidbounce.utils.rotation.RotationSettingsWithRotationModes
+import net.ccbluex.liquidbounce.injection.implementations.IMixinEntityPlayerSP
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.canUpdateRotation
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.getFixedAngleDelta
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.getVectorForRotation
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.rotationDifference
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.setTargetRotation
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.toRotation
+import net.ccbluex.liquidbounce.utils.simulation.SimulatedPlayer
+import net.ccbluex.liquidbounce.utils.timing.*
+import net.minecraft.block.BlockBush
+import net.minecraft.client.entity.EntityPlayerSP
+import net.minecraft.client.settings.GameSettings
+import net.minecraft.init.Blocks.air
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.client.renderer.RenderHelper
-import net.minecraft.client.settings.GameSettings
-import net.minecraft.init.Blocks
-import net.minecraft.item.Item
 import net.minecraft.item.ItemBlock
 import net.minecraft.item.ItemStack
-import net.minecraft.network.play.client.*
-import net.minecraft.network.play.client.C03PacketPlayer.C04PacketPlayerPosition
-import net.minecraft.stats.StatList
+import net.minecraft.network.play.client.C0APacketAnimation
+import net.minecraft.network.play.client.C0BPacketEntityAction
+import net.minecraft.network.play.client.C03PacketPlayer.C06PacketPlayerPosLook
+import net.minecraft.potion.Potion
 import net.minecraft.util.*
+import net.minecraft.world.WorldSettings
+import net.minecraftforge.event.ForgeEventFactory
 import org.lwjgl.input.Keyboard
 import org.lwjgl.opengl.GL11
 import java.awt.Color
-import java.security.SecureRandom
 import kotlin.math.*
+import net.ccbluex.liquidbounce.config.boolean
+import net.ccbluex.liquidbounce.config.choices
+import net.ccbluex.liquidbounce.config.float
+import net.ccbluex.liquidbounce.config.floatRange
+import net.ccbluex.liquidbounce.config.int
+import net.ccbluex.liquidbounce.config.intRange
 
-@ModuleInfo(name = "BlockFly", category = ModuleCategory.WORLD, keyBind = Keyboard.KEY_G)
-class BlockFly : Module() {
-
-    // Delay
-    private val placeableDelayValue = ListValue("PlaceableDelay", arrayOf("Normal", "Smart", "OFF"), "Normal")
-    private val placeDelayTower = BoolValue("TowerPlaceableDelay", true)
-    private val maxDelayValue: IntegerValue = object : IntegerValue("MaxDelay", 0, 0, 1000) {
-        override fun onChanged(oldValue: Int, newValue: Int) {
-            val i = minDelayValue.get()
-            if (i > newValue) set(i)
-        }
-    }.displayable { !placeableDelayValue.equals("OFF") } as IntegerValue
-    private val minDelayValue: IntegerValue = object : IntegerValue("MinDelay", 0, 0, 1000) {
-        override fun onChanged(oldValue: Int, newValue: Int) {
-            val i = maxDelayValue.get()
-            if (i < newValue) set(i)
-        }
-    }.displayable { !placeableDelayValue.equals("OFF") } as IntegerValue
-
-    // AutoBlock
-    private val autoBlockValue = ListValue("AutoBlock", arrayOf("Spoof", "LiteSpoof", "Switch", "OFF"), "LiteSpoof")
-
-    // Basic stuff
-    private val sprintValue = ListValue("Sprint", arrayOf("Always", "Dynamic", "OnGround", "OffGround", "Hypixel", "OFF"), "Always")
-    private val swingValue = ListValue("Swing", arrayOf("Normal", "Packet", "None"), "Normal")
-    private val searchValue = BoolValue("Search", true)
-    private val downValue = BoolValue("Down", true)
-    private val placeModeValue = ListValue("PlaceTiming", arrayOf("Pre", "Post", "All"), "Pre")
-    private val towerPlaceModeValue = ListValue("TowerPlaceTiming", arrayOf("Pre", "Post", "All"), "Post")
-
-    // Eagle
-    private val eagleValue = ListValue("Eagle", arrayOf("Silent", "Normal", "OFF"), "OFF")
-    private val blocksToEagleValue = IntegerValue("BlocksToEagle", 0, 0, 10).displayable { !eagleValue.equals("OFF") }
-
-    // Expand
-    private val expandLengthValue = IntegerValue("ExpandLength", 1, 1, 6)
-
-    // Rotations
-    private val rotationsValue = ListValue("Rotations", arrayOf("None", "Vanilla", "AAC", "Test1", "Test2", "Custom", "Advanced", "NCP", "AAC4", "Backwards", "Snap", "BackSnap"), "AAC")
-    private val towerrotationsValue = ListValue("TowerRotations", arrayOf("None", "Vanilla", "AAC", "Test1", "Test2", "Custom", "Advanced", "NCP", "AAC4", "Backwards"), "AAC")
-    private val aacYawValue = IntegerValue("AACYawOffset", 0, 0, 90).displayable { rotationsValue.equals("AAC") }
-    private val advancedYawModeValue = ListValue("AdvancedYawRotations", arrayOf("Offset", "Static", "RoundStatic", "Vanilla", "Round", "MoveDirection", "OffsetMove"), "MoveDirection").displayable { rotationsValue.equals("Advanced") }
-    private val advancedPitchModeValue = ListValue("AdvancedPitchRotations", arrayOf("Offset", "Static", "Vanilla"), "Static").displayable { rotationsValue.equals("Advanced") }
-    private val advancedYawOffsetValue = IntegerValue("AdvancedOffsetYaw", -15, -180, 180).displayable { rotationsValue.equals("Advanced") && advancedYawModeValue.equals("Offset") }
-    private val advancedYawMoveOffsetValue = IntegerValue("AdvancedMoveOffsetYaw", -15, -180, 180).displayable { rotationsValue.equals("Advanced") && advancedYawModeValue.equals("Offset") }
-    private val advancedYawStaticValue = IntegerValue("AdvancedStaticYaw", 145, -180, 180).displayable { rotationsValue.equals("Advanced") && (advancedYawModeValue.equals("Static") || advancedYawModeValue.equals("RoundStatic")) }
-    private val advancedYawRoundValue = IntegerValue("AdvancedYawRoundValue", 45, 0, 180).displayable { rotationsValue.equals("Advanced") && (advancedYawModeValue.equals("Round") || advancedYawModeValue.equals("RoundStatic")) }
-    private val advancedPitchOffsetValue = FloatValue("AdvancedOffsetPitch", -0.4f, -90f, 90f).displayable { rotationsValue.equals("Advanced") && advancedPitchModeValue.equals("Offset") }
-    private val advancedPitchStaticValue = FloatValue("AdvancedStaticPitch", 82.4f, -90f, 90f).displayable { rotationsValue.equals("Advanced") && advancedPitchModeValue.equals("Static") }
-    private val randomChangeValue = BoolValue("RandomChange", false)
-    private val changeMaxPitchValue = IntegerValue("ChangeMaxPitch", 1, -89, 89).displayable { randomChangeValue.get() }
-    private val changeMaxYawValue = IntegerValue("ChangeMaxYaw", 1, -179, 179).displayable { randomChangeValue.get() }
-    private val customYawValue = IntegerValue("CustomYaw", -145, -180, 180).displayable { rotationsValue.equals("Custom") }
-    private val customPitchValue = IntegerValue("CustomPitch", 79, -90, 90).displayable { rotationsValue.equals("Custom") }
-    private val silentRotationValue = BoolValue("SilentRotation", true).displayable { !rotationsValue.equals("None") }
-    private val minRotationSpeedValue: IntegerValue = object : IntegerValue("MinRotationSpeed", 180, 0, 180) {
-        override fun onChanged(oldValue: Int, newValue: Int) {
-            val v = maxRotationSpeedValue.get()
-            if (v < newValue) set(v)
-        }
-    }.displayable { !rotationsValue.equals("None") } as IntegerValue
-    private val maxRotationSpeedValue: IntegerValue = object : IntegerValue("MaxRotationSpeed", 180, 0, 180) {
-        override fun onChanged(oldValue: Int, newValue: Int) {
-            val v = minRotationSpeedValue.get()
-            if (v > newValue) set(v)
-        }
-    }.displayable { !rotationsValue.equals("None") } as IntegerValue
-    private val keepLengthValue = IntegerValue("KeepRotationTick", 0, 0, 20).displayable { !rotationsValue.equals("None") }
-
-    // Zitter
-    private val zitterModeValue = ListValue("ZitterMode", arrayOf("Teleport", "Smooth", "OFF"), "OFF")
-    private val zitterSpeedValue = FloatValue("ZitterSpeed", 0.13f, 0.1f, 0.3f).displayable { !zitterModeValue.equals("OFF") }
-    private val zitterStrengthValue = FloatValue("ZitterStrength", 0.072f, 0.05f, 0.2f).displayable { !zitterModeValue.equals("OFF") }
-
-    // Game
-    private val bypassValue = BoolValue("C03Spoof" ,true)
-    private val timerModeValue = ListValue("TimerMode", arrayOf("Static", "Dynamic"), "Static")
-    private val timerValue = FloatValue("StaticTimer", 1f, 0.1f, 5f).displayable {timerModeValue.equals("Static")}
-    private val timerChangeDelayValue = IntegerValue("TimerChangeDelay", 1000, 50, 10000).displayable {timerModeValue.equals("Dynamic")}
-    private val firstTimerValue = FloatValue("FirstTimer", 1.0f, 0.1f, 5f).displayable {timerModeValue.equals("Dynamic")}
-    private val lastTimerValue = FloatValue("LastTimer", 1.0f, 0.1f, 5f).displayable {timerModeValue.equals("Dynamic")}
-    private val motionSpeedEnabledValue = BoolValue("MotionSpeedSet", false)
-    private val motionSpeedValue = FloatValue("MotionSpeed", 0.1f, 0.05f, 1f).displayable { motionSpeedEnabledValue.get() }
-    private val speedModifierValue = FloatValue("SpeedModifier", 1f, 0f, 2f)
-    private val boostValue = BoolValue("Boost", false)
-
-    // Tower
-    private val towerModeValue = ListValue(
-        "TowerMode", arrayOf(
-            "Jump",
-            "Motion",
-            "ConstantMotion",
-            "PlusMotion",
-            "StableMotion",
-            "MotionTP",
-            "MotionTP2",
-            "Packet",
-            "Teleport",
-            "AAC3.3.9",
-            "AAC3.6.4",
-            "AAC4.4Constant",
-            "AAC4Jump",
-            "Verus",
-            "NCP",
-            "Matrix",
-            "Universo"
-        ), "Jump"
-    )
-    private val stopWhenBlockAboveValue = BoolValue("StopTowerWhenBlockAbove", true)
-    private val towerFakeJumpValue = BoolValue("TowerFakeJump", true)
-    private val towerActiveValue = ListValue("TowerActivation", arrayOf("Always", "PressSpace", "NoMove", "OFF"), "PressSpace")
-    private val towerTimerValue = FloatValue("TowerTimer", 1f, 0.1f, 5f)
-
-    // Safety
-    private val sameYValue = ListValue("SameY", arrayOf("Simple", "AutoJump", "WhenSpeed", "OFF"), "WhenSpeed")
-    private val safeWalkValue = ListValue("SafeWalk", arrayOf("Ground", "Air", "OFF"), "OFF")
-    private val hitableCheckValue = ListValue("HitableCheck", arrayOf("Simple", "Strict", "OFF"), "Simple")
-    private val moveFixValue = BoolValue("StrafeFix", false)
-
-    // Extra click
-    private val extraClickValue = ListValue("ExtraClick", arrayOf("EmptyC08", "AfterPlace", "RayTrace", "OFF"), "OFF")
-    private val extraClickCountValue = IntegerValue("ExtraClickCount", 1, 1, 30).displayable { !extraClickValue.equals("OFF") }
-    private val extraClickMaxDelayValue: IntegerValue = object : IntegerValue("ExtraClickMaxDelay", 100, 20, 300) {
-        override fun onChanged(oldValue: Int, newValue: Int) {
-            val i = extraClickMinDelayValue.get()
-            if (i > newValue) set(i)
-        }
-    }.displayable { !extraClickValue.equals("OFF") } as IntegerValue
-    private val extraClickMinDelayValue: IntegerValue = object : IntegerValue("ExtraClickMinDelay", 50, 20, 300) {
-        override fun onChanged(oldValue: Int, newValue: Int) {
-            val i = extraClickMaxDelayValue.get()
-            if (i < newValue) set(i)
-        }
-    }.displayable { !extraClickValue.equals("OFF") } as IntegerValue
-
-    // Jump mode
-    private val jumpMotionValue = FloatValue("TowerJumpMotion", 0.42f, 0.3681289f, 0.79f).displayable { towerModeValue.equals("Jump") }
-    private val jumpDelayValue = IntegerValue("TowerJumpDelay", 0, 0, 20).displayable { towerModeValue.equals("Jump") }
-
-    // Stable/PlusMotion
-    private val stableMotionValue = FloatValue("TowerStableMotion", 0.42f, 0.1f, 1f).displayable { towerModeValue.equals("StableMotion") }
-    private val plusMotionValue = FloatValue("TowerPlusMotion", 0.1f, 0.01f, 0.2f).displayable { towerModeValue.equals("PlusMotion") }
-    private val plusMaxMotionValue = FloatValue("TowerPlusMaxMotion", 0.8f, 0.1f, 2f).displayable { towerModeValue.equals("PlusMotion") }
-
-    // ConstantMotion
-    private val constantMotionValue = FloatValue("TowerConstantMotion", 0.42f, 0.1f, 1f).displayable { towerModeValue.equals("ConstantMotion") }
-    private val constantMotionJumpGroundValue = FloatValue("TowerConstantMotionJumpGround", 0.79f, 0.76f, 1f).displayable { towerModeValue.equals("ConstantMotion") }
-
-    // Teleport
-    private val teleportHeightValue = FloatValue("TowerTeleportHeight", 1.15f, 0.1f, 5f).displayable { towerModeValue.equals("Teleport") }
-    private val teleportDelayValue = IntegerValue("TowerTeleportDelay", 0, 0, 20).displayable { towerModeValue.equals("Teleport") }
-    private val teleportGroundValue = BoolValue("TowerTeleportGround", true).displayable { towerModeValue.equals("Teleport") }
-    private val teleportNoMotionValue = BoolValue("TowerTeleportNoMotion", false).displayable { towerModeValue.equals("Teleport") }
-
-    // Visuals
-    private val counterDisplayValue = BoolValue("Counter", true)
-    private val counterModeValue = ListValue("CounterMode", arrayOf("LBP", "Drama", "Sigma", "Novoline", "Simple", "Advanced","Rounded"), "lbp").displayable { counterDisplayValue.get() }
-    private val blurValue = BoolValue("Advanced Blur", false).displayable { counterDisplayValue.get() && counterModeValue.equals("Advanced") }
-    private val blurStrength = FloatValue("Blur Strength", 1f, 0f, 30f).displayable { counterDisplayValue.get() && counterModeValue.equals("Advanced") }
-    private val redValue = IntegerValue("Red", 255, 0, 255).displayable { counterDisplayValue.get() && counterModeValue.equals("Drama") }
-    private val greenValue = IntegerValue("Green", 40, 0, 255).displayable { counterDisplayValue.get() && counterModeValue.equals("Drama") }
-    private val blueValue = IntegerValue("Blue", 255, 0, 255).displayable { counterDisplayValue.get() && counterModeValue.equals("Drama") }
-    private val alpha = IntegerValue("Alpha", 255, 0, 255).displayable { counterDisplayValue.get() && counterModeValue.equals("Drama") }
-    private val markValue = BoolValue("Mark", false)
-    private val markRainbowValue = BoolValue("MarkRainbow", false).displayable { markValue.get() }
-
-    private var progress = 0f
-    private var lastMS = 0L
+object BlockFly : Module("BlockFly", Category.WORLD, Category.SubCategory.MISCELLANEOUS, Keyboard.KEY_V) {
 
     /**
-     * MODULE
+     * TOWER MODES & SETTINGS
      */
-    // Target block
-    private var targetPlace: PlaceInfo? = null
 
-    // Last OnGround position
-    private var lastGroundY = 0
+    // -->
 
-    // Rotation lock
-    private var lockRotation: Rotation? = null
+    private val towerMode by Tower.towerModeValues
 
-    // Auto block slot
-    private var slot = 0
+    init {
+        addValues(Tower.values)
+    }
 
-    // Zitter Smooth
+    // <--
+
+    /**
+     * SCAFFOLD MODES & SETTINGS
+     */
+
+    // -->
+
+    val scaffoldMode by choices(
+        "ScaffoldMode", arrayOf("Normal", "Rewinside", "Expand", "Telly", "GodBridge", "Sprint", "Breezily", "Jump", "Sneak"), "Normal"
+    )
+        .describe("Bridging technique to use.")
+
+    private val ticksUntilRotation by intRange("TicksUntilRotation", 3..3, 1..8) { scaffoldMode == "Telly" }
+        .describe("Hold the natural look for this many air ticks after the jump before aiming at the block. Keeping the look still on the ground is what lets the jump fire, and aiming only once airborne is what puts the block under you. Raise if blocks land behind you, lower if the bridge feels slow.")
+
+    private val tellyDebug by boolean("TellyDebug", false)
+        .describe("Log Telly jump/place timing to the client log for debugging.")
+
+    // Breezily
+    private val breezilyEdge by float("BreezilyEdge", 0.22f, 0.05f..0.45f) { scaffoldMode == "Breezily" }
+        .describe("How far back from the edge to start placing.")
+
+    // Expand
+    private val omniDirectionalExpand by boolean("OmniDirectionalExpand", false) { scaffoldMode == "Expand" }
+        .describe("Expand bridge in all directions, not just forward.")
+    private val expandLength by int("ExpandLength", 1, 1..6) { scaffoldMode == "Expand" }
+        .describe("How many blocks ahead to expand.")
+
+    // Placeable delay
+    private val placeDelayValue = boolean("PlaceDelay", true) { scaffoldMode != "GodBridge" }
+        .describe("Add a delay between block placements.")
+    private val delay by intRange("Delay", 0..0, 0..1000) { placeDelayValue.isActive() }
+        .describe("Random delay range between placements in ms.")
+
+    // Extra clicks
+    private val extraClicks by boolean("DoExtraClicks", false)
+        .describe("Send extra clicks to improve placement reliability.")
+    private val simulateDoubleClicking by boolean("SimulateDoubleClicking", false) { extraClicks }
+        .describe("Mimic human double-clicking when placing.")
+    private val extraClickCPS by intRange("ExtraClickCPS", 3..7, 0..50) { extraClicks }
+        .describe("Clicks-per-second range for the extra clicks.")
+    private val placementAttempt by choices(
+        "PlacementAttempt", arrayOf("Fail", "Independent"), "Fail"
+    ) { extraClicks }
+        .describe("When extra clicks fire relative to placement.")
+
+    // Autoblock
+    private val autoBlock by choices("AutoBlock", arrayOf("Off", "Pick", "Spoof", "FakeSpoof", "Switch"), "Spoof")
+        .describe("How to switch to a block before placing.")
+    private val sortByHighestAmount by boolean("SortByHighestAmount", false) { autoBlock != "Off" }
+        .describe("Pick the hotbar block with the highest count first.")
+    private val earlySwitch by boolean("EarlySwitch", false) { autoBlock != "Off" && !sortByHighestAmount }
+        .describe("Switch to the next slot before running out.")
+    private val amountBeforeSwitch by int(
+        "SlotAmountBeforeSwitch", 3, 1..10
+    ) { earlySwitch && !sortByHighestAmount }
+        .describe("Block count left before switching slots.")
+
+    // Settings
+    private val autoF5 by boolean("AutoF5", false).subjective()
+        .describe("Force third-person front view while bridging.")
+
+    // Basic stuff
+    val sprint by boolean("Sprint", false)
+        .describe("Allow sprinting while bridging.")
+    val sprintMode by choices("SprintMode", arrayOf("Normal", "MotionSprint", "OnlyOnGround", "OnlyInAir"), "Normal") { sprint }
+        .describe("When sprinting is permitted.")
+    private val swing by boolean("Swing", true).subjective()
+        .describe("Swing the arm when placing.")
+    private val down by boolean("Down", true) { !sameY && scaffoldMode !in arrayOf("GodBridge", "Telly") }
+        .describe("Look downward while bridging.")
+    private val autoJump by boolean("AutoJump", false) { scaffoldMode !in arrayOf("GodBridge", "Telly") }
+        .describe("Automatically jump while bridging.")
+
+    // GodBridge mode sub-values
+    private val waitForRots by boolean("WaitForRotations", false) { supportsGodBridgeRotations }
+        .describe("Wait until the rotation lands before placing.")
+    private val useOptimizedPitch by boolean("UseOptimizedPitch", false) { supportsGodBridgeRotations }
+        .describe("Auto-tune the GodBridge pitch.")
+    private val customGodPitch by float(
+        "GodBridgePitch", 73.5f, 0f..90f
+    ) { supportsGodBridgeRotations && !useOptimizedPitch }
+        .describe("Manual pitch angle for GodBridge.")
+
+    val jumpAutomatically by boolean("JumpAutomatically", true) { scaffoldMode == "GodBridge" }
+        .describe("Jump on a timer instead of per block count.")
+    private val blocksToJumpRange by intRange("BlocksToJumpRange", 4..4, 1..8) {  scaffoldMode == "GodBridge" && !jumpAutomatically }
+        .describe("Blocks placed between each jump.")
+    private val godbridgeMovementMode by choices("GodBridgeMovementMode", arrayOf("Jump", "Sneak", "Both"), "Jump") { scaffoldMode == "GodBridge" }
+        .describe("Movement used to keep the GodBridge going.")
+
+    // Telly mode sub-values
+    private val startHorizontally by boolean("StartHorizontally", true) { scaffoldMode == "Telly" }
+        .describe("Begin the Telly pattern with horizontal placements.")
+    private val horizontalPlacementsRange by intRange("HorizontalPlacementsRange", 1..1, 1..10) { scaffoldMode == "Telly" }
+        .describe("Horizontal blocks placed per Telly cycle.")
+    private val verticalPlacementsRange by intRange("VerticalPlacementsRange", 1..1, 1..10) { scaffoldMode == "Telly" }
+        .describe("Vertical blocks placed per Telly cycle.")
+
+    private val jumpTicksRange by intRange("JumpTicksRange", 0..0, 0..10) { scaffoldMode == "Telly" }
+        .describe("Ticks to hold the jump in Telly mode.")
+
+    private val allowClutching by boolean("AllowClutching", true) { scaffoldMode !in arrayOf("Telly", "Expand") }
+        .describe("Place blocks to recover when falling off.")
+    private val horizontalClutchBlocks by int("HorizontalClutchBlocks", 3, 1..5) {
+        allowClutching && scaffoldMode !in arrayOf("Telly", "Expand")
+    }
+        .describe("Horizontal reach allowed when clutching.")
+    private val verticalClutchBlocks by int("VerticalClutchBlocks", 2, 1..3) {
+        allowClutching && scaffoldMode !in arrayOf("Telly", "Expand")
+    }
+        .describe("Vertical reach allowed when clutching.")
+    private val blockSafe by boolean("BlockSafe", false) { !isGodBridgeBehaviorEnabled }
+        .describe("Only place when standing on a safe spot.")
+
+    // Eagle
+    private val eagleValue =
+        choices("Eagle", arrayOf("Normal", "Silent", "Off"), "Normal") { scaffoldMode != "GodBridge" }
+            .describe("Sneak at block edges to avoid falling.")
+    val eagle by eagleValue
+    private val eagleMode by choices("EagleMode", arrayOf("Both", "OnGround", "InAir"), "Both")
+    { eagle != "Off" && scaffoldMode != "GodBridge" }
+        .describe("When eagle sneaking is active.")
+    private val adjustedSneakSpeed by boolean("AdjustedSneakSpeed", true)
+    { eagle == "Silent" && scaffoldMode != "GodBridge" }
+        .describe("Compensate speed for silent sneaking.")
+    private val eagleSpeed by float("EagleSpeed", 0.3f, 0.3f..1.0f) { eagle != "Off" && scaffoldMode != "GodBridge" }
+        .describe("Movement speed while eagle sneaking.")
+    val eagleSprint by boolean("EagleSprint", false) { eagle == "Normal" && scaffoldMode != "GodBridge" }
+        .describe("Keep sprinting while eagle sneaking.")
+    private val blocksToEagle by intRange("BlocksToEagle", 0..0, 0..10) { eagle != "Off" && scaffoldMode != "GodBridge" }
+        .describe("Blocks placed between eagle sneaks.")
+    private val edgeDistance by float("EagleEdgeDistance", 0f, 0f..0.5f)
+    { eagle != "Off" && scaffoldMode != "GodBridge" }
+        .describe("Distance from the edge to start sneaking.")
+    private val useMaxSneakTime by boolean("UseMaxSneakTime", true) { eagle != "Off" && scaffoldMode != "GodBridge" }
+        .describe("Limit how long eagle sneaking lasts.")
+    private val maxSneakTicks by intRange("MaxSneakTicks", 3..3, 0..10) { useMaxSneakTime }
+        .describe("Maximum ticks to hold the eagle sneak.")
+    private val blockSneakingAgainUntilOnGround by boolean("BlockSneakingAgainUntilOnGround", true)
+    { useMaxSneakTime && eagleMode != "OnGround" }
+        .describe("Stop re-sneaking until back on the ground.")
+
+    // Rotation Options
+    private val modeList =
+        choices(
+            "Rotations",
+            arrayOf(
+                "Off", "Normal", "Stabilized", "NearestRotation", "ReverseYaw", "AAC", "Custom", "Advanced",
+                "Backwards", "GodBridge"
+            ),
+            "Normal"
+        )
+            .describe("Rotation style used while placing.")
+    private val jumpRotationMode by choices(
+        "JumpRotations",
+        arrayOf(
+            "Same", "Off", "Normal", "Stabilized", "NearestRotation", "ReverseYaw", "AAC", "Custom", "Advanced",
+            "Backwards", "GodBridge"
+        ),
+        "Same"
+    )
+        .describe("Rotation style used while jumping.")
+    private val aacYawOffset by int("AACYawOffset", 0, -180..180) { supportsAacRotations }
+        .describe("Yaw offset applied in AAC rotation mode.")
+    private val customYaw by int("CustomYaw", -145, -180..180) { supportsCustomRotations }
+        .describe("Fixed yaw used in Custom rotation mode.")
+    private val customPitch by float("CustomPitch", 82.4f, -90f..90f) { supportsCustomRotations }
+        .describe("Fixed pitch used in Custom rotation mode.")
+    private val advancedYawMode by choices(
+        "AdvancedYawMode",
+        arrayOf("Offset", "Static", "RoundStatic", "Vanilla", "Round", "MoveDirection", "OffsetMove", "RoundMoveDir"),
+        "MoveDirection"
+    ) { supportsAdvancedRotations }
+        .describe("How yaw is computed in Advanced rotation mode.")
+    private val advancedPitchMode by choices(
+        "AdvancedPitchMode", arrayOf("Offset", "Static", "Vanilla", "Backwards"), "Static"
+    ) { supportsAdvancedRotations }
+        .describe("How pitch is computed in Advanced rotation mode.")
+    private val advancedYawOffset by int("AdvancedYawOffset", -15, -180..180) {
+        supportsAdvancedRotations && advancedYawMode == "Offset"
+    }
+        .describe("Yaw offset for the Advanced Offset yaw mode.")
+    private val advancedYawMoveOffset by int("AdvancedYawMoveOffset", -15, -180..180) {
+        supportsAdvancedRotations && advancedYawMode == "OffsetMove"
+    }
+        .describe("Yaw offset relative to movement direction.")
+    private val advancedYawStatic by int("AdvancedYawStatic", 145, -180..180) {
+        supportsAdvancedRotations && advancedYawMode in arrayOf("Static", "RoundStatic")
+    }
+        .describe("Static yaw for the Advanced Static yaw modes.")
+    private val advancedYawRoundValue by int("AdvancedYawRoundValue", 45, 1..180) {
+        supportsAdvancedRotations && advancedYawMode in arrayOf("Round", "RoundStatic", "RoundMoveDir")
+    }
+        .describe("Rounding step for the Advanced Round yaw modes.")
+    private val advancedPitchOffset by float("AdvancedPitchOffset", -0.4f, -90f..90f) {
+        supportsAdvancedRotations && advancedPitchMode == "Offset"
+    }
+        .describe("Pitch offset for the Advanced Offset pitch mode.")
+    private val advancedPitchStatic by float("AdvancedPitchStatic", 82.4f, -90f..90f) {
+        supportsAdvancedRotations && advancedPitchMode == "Static"
+    }
+        .describe("Static pitch for the Advanced Static pitch mode.")
+
+    private val options: RotationSettingsWithRotationModes = RotationSettingsWithRotationModes(this, modeList).apply {
+        modernTicksUntilResetValue.setSupport { it && scaffoldMode != "Telly" }
+        withRequestPriority(RotationPriority.HIGH)
+        rotationModeProvider = { this@BlockFly.activeRotationMode }
+        rotationsActiveProvider = { this@BlockFly.hasConfiguredRotations }
+    }
+
+    private val rotationTiming by choices("RotationTiming", arrayOf("Normal", "OnTick", "OnTickSnap"), "Normal")
+        .describe("When the rotation is applied each tick.")
+
+    // Search options
+    val searchMode by choices("SearchMode", arrayOf("Area", "Center"), "Area") { scaffoldMode != "GodBridge" }
+        .describe("How target block faces are searched.")
+    private val minDist by float("MinDist", 0f, 0f..0.2f) { scaffoldMode !in arrayOf("GodBridge", "Telly") }
+        .describe("Minimum distance from the block edge to aim.")
+
+    // Zitter
+    private val zitterMode by choices("Zitter", arrayOf("Off", "Teleport", "Smooth"), "Off")
+        .describe("Side-to-side jitter movement style.")
+    private val zitterSpeed by float("ZitterSpeed", 0.13f, 0.1f..0.3f) { zitterMode == "Teleport" }
+        .describe("Speed of the teleport zitter movement.")
+    private val zitterStrength by float("ZitterStrength", 0.05f, 0f..0.2f) { zitterMode == "Teleport" }
+        .describe("Sideways strength of the teleport zitter.")
+    private val zitterTicks by intRange("ZitterTicks", 2..3, 0..6) { zitterMode == "Smooth" }
+        .describe("Ticks between smooth zitter direction flips.")
+
+    private val useSneakMidAir by boolean("UseSneakMidAir", false) { zitterMode == "Smooth" }
+        .describe("Sneak in mid-air during smooth zitter.")
+
+    // Game
+    val timer by float("Timer", 1f, 0.1f..10f)
+        .describe("Game-speed timer multiplier while bridging.")
+    private val speedModifier by float("SpeedModifier", 1f, 0f..2f)
+        .describe("Multiplier applied to movement speed.")
+    private val speedLimiter by boolean("SpeedLimiter", false) { !slow }
+        .describe("Cap movement speed to a fixed limit.")
+    private val speedLimit by float("SpeedLimit", 0.11f, 0.01f..0.12f) { !slow && speedLimiter }
+        .describe("Maximum allowed movement speed.")
+    private val slow by boolean("Slow", false)
+        .describe("Slow down to place more reliably.")
+    private val slowGround by boolean("SlowOnlyGround", false) { slow }
+        .describe("Only apply the slowdown while on the ground.")
+    private val slowSpeed by float("SlowSpeed", 0.6f, 0.2f..0.8f) { slow }
+        .describe("Movement speed while slowed.")
+
+    // Jump Strafe
+    private val jumpStrafe by boolean("JumpStrafe", false)
+        .describe("Strafe while jumping to keep momentum.")
+    private val jumpStraightStrafe by floatRange("JumpStraightStrafe", 0.4f..0.45f, 0.1f..1f) { jumpStrafe }
+        .describe("Strafe speed range when moving straight.")
+    private val jumpDiagonalStrafe by floatRange("JumpDiagonalStrafe", 0.4f..0.45f, 0.1f..1f) { jumpStrafe }
+        .describe("Strafe speed range when moving diagonally.")
+
+    // Safety
+    private val sameY by boolean("SameY", false) { scaffoldMode != "GodBridge" }
+        .describe("Only bridge at the current Y level.")
+    private val jumpOnUserInput by boolean("JumpOnUserInput", true) { sameY && scaffoldMode != "GodBridge" }
+        .describe("Allow jumping when you press jump.")
+
+    private val safeWalkValue = boolean("SafeWalk", true) { scaffoldMode != "GodBridge" }
+        .describe("Prevent walking off block edges.")
+    private val airSafe by boolean("AirSafe", false) { safeWalkValue.isActive() }
+        .describe("Extend safe-walk protection while airborne.")
+
+    // Visuals
+    private val mark by boolean("Mark", false).subjective()
+        .describe("Highlight the block about to be placed.")
+    private val markRainbow by boolean("MarkRainbow", false) { mark }.subjective()
+        .describe("Draw the mark with a rainbow colour.")
+    private val counter by boolean("Counter", false).subjective()
+        .describe("Show the amount of blocks left on screen.")
+    private val counterMode by choices(
+        "CounterMode",
+        arrayOf("LBP", "Rounded", "Simple", "Drama", "FDP", "Sigma", "Novoline", "Advanced"),
+        "LBP"
+    ) { counter }.subjective().describe("Style of the block counter.")
+    private val counterBlur by boolean("CounterBlur", false) { counter && counterMode == "Advanced" }.subjective()
+        .describe("Blur the background of the advanced counter.")
+    private val counterBlurStrength by float("CounterBlurStrength", 1f, 0f..30f) { counterBlur }.subjective()
+        .describe("Blur radius of the advanced counter.")
+    private val trackCPS by boolean("TrackCPS", false).subjective()
+        .describe("Show the current placement clicks-per-second.")
+
+    private val generalGroup = Configurable("General")
+    private val placementGroup = Configurable("Placement")
+    private val autoBlockGroup = Configurable("AutoBlock")
+    private val modesGroup = Configurable("Modes")
+    private val godBridgeGroup = Configurable("GodBridge")
+    private val rotationsGroup = Configurable("Rotations")
+    private val movementGroup = Configurable("Movement")
+    private val eagleGroup = Configurable("Eagle")
+    private val zitterGroup = Configurable("Zitter")
+    private val safeWalkGroup = Configurable("SafeWalk")
+    private val visualsGroup = Configurable("Visuals")
+
+    init {
+        moveValues(generalGroup,
+            "ScaffoldMode", "AutoF5", "Timer", "SpeedModifier")
+
+        moveValues(placementGroup,
+            "PlaceDelay", "Delay", "DoExtraClicks", "SimulateDoubleClicking", "ExtraClickCPS",
+            "PlacementAttempt", "SearchMode", "MinDist", "BlockSafe")
+
+        moveValues(autoBlockGroup,
+            "AutoBlock", "SortByHighestAmount", "EarlySwitch", "SlotAmountBeforeSwitch")
+
+        moveValues(modesGroup,
+            "BreezilyEdge", "OmniDirectionalExpand", "ExpandLength",
+            "StartHorizontally", "HorizontalPlacementsRange", "VerticalPlacementsRange", "JumpTicksRange")
+
+        moveValues(godBridgeGroup,
+            "WaitForRotations", "UseOptimizedPitch", "GodBridgePitch", "JumpAutomatically",
+            "BlocksToJumpRange", "GodBridgeMovementMode")
+
+        options.nestInto(rotationsGroup)
+        moveValues(rotationsGroup,
+            "JumpRotations", "AACYawOffset", "CustomYaw", "CustomPitch", "AdvancedYawMode",
+            "AdvancedPitchMode", "AdvancedYawOffset", "AdvancedYawMoveOffset", "AdvancedYawStatic",
+            "AdvancedYawRoundValue", "AdvancedPitchOffset", "AdvancedPitchStatic", "ConsiderInventory",
+            "RotationTiming")
+
+        moveValues(movementGroup,
+            "Sprint", "SprintMode", "Swing", "Down", "AutoJump", "AllowClutching",
+            "HorizontalClutchBlocks", "VerticalClutchBlocks", "SpeedLimiter", "SpeedLimit", "Slow",
+            "SlowOnlyGround", "SlowSpeed", "JumpStrafe", "JumpStraightStrafe", "JumpDiagonalStrafe")
+
+        moveValues(eagleGroup,
+            "Eagle", "EagleMode", "AdjustedSneakSpeed", "EagleSpeed", "EagleSprint", "BlocksToEagle",
+            "EagleEdgeDistance", "UseMaxSneakTime", "MaxSneakTicks", "BlockSneakingAgainUntilOnGround")
+
+        moveValues(zitterGroup,
+            "Zitter", "ZitterSpeed", "ZitterStrength", "ZitterTicks", "UseSneakMidAir")
+
+        moveValues(safeWalkGroup,
+            "SameY", "JumpOnUserInput", "SafeWalk", "AirSafe")
+
+        moveValues(visualsGroup,
+            "Mark", "MarkRainbow", "TrackCPS", "Counter", "CounterMode", "CounterBlur", "CounterBlurStrength")
+
+        addValues(listOf(
+            generalGroup, placementGroup, autoBlockGroup, modesGroup, godBridgeGroup, rotationsGroup,
+            movementGroup, eagleGroup, zitterGroup, safeWalkGroup, visualsGroup,
+        ))
+    }
+    // Target placement
+    var placeRotation: PlaceRotation? = null
+
+    // Launch position
+    private var launchY = -999
+
+    val shouldJumpOnInput
+        get() = !jumpOnUserInput || !mc.gameSettings.keyBindJump.isKeyDown && mc.thePlayer.posY >= launchY && !mc.thePlayer.onGround
+
+    private val shouldKeepLaunchPosition
+        get() = sameY && shouldJumpOnInput && scaffoldMode != "GodBridge"
+
+    // Zitter
     private var zitterDirection = false
 
     // Delay
-    private val delayTimer = MSTimer()
-    private val zitterTimer = MSTimer()
-    private val clickTimer = MSTimer()
-    private val towerTimer = TickTimer()
-    private var delay: Long = 0
-    private var clickDelay: Long = 0
-    private var lastPlace = 0
+    private val delayTimer = object : DelayTimer(delay.first, delay.last, MSTimer()) {
+        override fun hasTimePassed() = !placeDelayValue.isActive() || super.hasTimePassed()
+    }
+
+    private val zitterTickTimer = TickDelayTimer(zitterTicks.first, zitterTicks.last)
 
     // Eagle
     private var placedBlocksWithoutEagle = 0
-    private var eagleSneaking = false
 
-    // Down
-    private var shouldGoDown = false
-    private var jumpGround = 0.0
-    private var towerStatus = false
-    private var canSameY = false
-    private var lastPlaceBlock: BlockPos? = null
-    private var afterPlaceC08: C08PacketPlayerBlockPlacement? = null
+    var eagleSneaking = false
 
-    //Other
-    private var doSpoof = false
-    val changetimer = MSTimer()
+    private var requestedStopSneak = false
+    private val eagleSneakTask = Any()
+    private val eagleGroundBlockTask = Any()
 
-    /**
-     * Enable module
-     */
-    override fun onEnable() {
-        progress = 0f
-        lastMS = System.currentTimeMillis()
-        slot = mc.thePlayer.inventory.currentItem
-        doSpoof = false
-        if (mc.thePlayer == null) return
-        lastGroundY = mc.thePlayer.posY.toInt()
-        lastPlace = 2
-        clickDelay = TimeUtils.randomDelay(extraClickMinDelayValue.get(), extraClickMaxDelayValue.get())
+    private val isEagleEnabled
+        get() = eagle != "Off" && !shouldGoDown && scaffoldMode != "GodBridge"
 
-        if (mc.thePlayer == null) return;
-        if (sprintValue.get().equals("Hypixel", true)) {
-            mc.thePlayer.isSprinting = false;
-            mc.thePlayer.motionX *= 1.19;
-            mc.thePlayer.motionZ *= 1.19;
-        }
-    }
+    // Downwards
+    val shouldGoDown
+        get() = down && !sameY && GameSettings.isKeyDown(mc.gameSettings.keyBindSneak) && scaffoldMode !in arrayOf(
+            "GodBridge", "Telly"
+        ) && blocksAmount() > 1
 
-    /**
-     * Update event
-     *
-     * @param event
-     */
-    @EventTarget
-    fun onUpdate(event: UpdateEvent) {
-        if (getBlocksAmount2() <= 0) {
-            this.state = false
-            LiquidBounce.hud.addNotification(Notification("BlockFly", "No item in inventory!", NotifyType.WARNING))
-            return
-        }
-        if (towerStatus && towerModeValue.get().lowercase() != "aac3.3.9" && towerModeValue.get().lowercase() != "aac4.4constant" && towerModeValue.get().lowercase() != "aac4jump") mc.timer.timerSpeed = towerTimerValue.get()
-        if (!towerStatus) {
-            when (timerModeValue.get().lowercase()) {
-                "static" -> mc.timer.timerSpeed = timerValue.get()
-                "dynamic" -> {
-                    mc.timer.timerSpeed = firstTimerValue.get()
-                    if (changetimer.hasTimePassed(timerChangeDelayValue.get().toLong())) {
-                        mc.timer.timerSpeed = lastTimerValue.get()
-                        changetimer.reset()
-                    }
-                }
-            }
-        }
-        if (sprintValue.get().equals("Hypixel", true)) {
-            if (mc.thePlayer.onGround) ;
-            mc.thePlayer.setSprinting(false);
-            mc.thePlayer.motionX *= 1.19;
-            mc.thePlayer.motionZ *= 1.19;
-        }
-        if (towerStatus || mc.thePlayer.isCollidedHorizontally) {
-            canSameY = false
-            lastGroundY = mc.thePlayer.posY.toInt()
+    // Current rotation
+    private val currRotation
+        get() = RotationUtils.currentRotation ?: mc.thePlayer.rotation
+
+    // Extra clicks
+    private var extraClick = ExtraClickInfo(TimeUtils.randomClickDelay(extraClickCPS.first, extraClickCPS.last), 0L, 0)
+
+    // GodBridge
+    private var blocksPlacedUntilJump = 0
+
+    private val isManualJumpOptionActive
+        get() = scaffoldMode == "GodBridge" && !jumpAutomatically
+
+    private var blocksToJump = blocksToJumpRange.random()
+
+    private val hasJumpRotationOverride: Boolean
+        get() = jumpRotationMode != "Same"
+
+    private val defaultRotationMode: String
+        get() = if (scaffoldMode == "GodBridge") "GodBridge" else options.rotationMode
+
+    private val activeRotationMode: String
+        get() = if (mc.gameSettings.keyBindJump.isKeyDown && hasJumpRotationOverride) {
+            jumpRotationMode
         } else {
-            when (sameYValue.get().lowercase()) {
-                "simple" -> {
-                    canSameY = true
-                }
-                "autojump" -> {
-                    canSameY = true
-                    if (MovementUtils.isMoving() && mc.thePlayer.onGround) {
-                        mc.thePlayer.jump()
-                    }
-                }
-                "whenspeed" -> {
-                    canSameY = LiquidBounce.moduleManager[Speed::class.java]!!.state
-                }
-                else -> {
-                    canSameY = false
-                }
-            }
-            if (mc.thePlayer.onGround) {
-                lastGroundY = mc.thePlayer.posY.toInt()
+            defaultRotationMode
+        }
+
+    private val currentRotationsActive: Boolean
+        get() = activeRotationMode != "Off"
+
+    private val hasConfiguredRotations: Boolean
+        get() = scaffoldMode == "GodBridge" || options.rotationMode != "Off" || jumpRotationMode !in arrayOf("Same", "Off")
+
+    private val supportsGodBridgeRotations: Boolean
+        get() = scaffoldMode == "GodBridge" || options.rotationMode == "GodBridge" || jumpRotationMode == "GodBridge"
+
+    private val supportsAacRotations: Boolean
+        get() = options.rotationMode == "AAC" || jumpRotationMode == "AAC"
+
+    private val supportsCustomRotations: Boolean
+        get() = options.rotationMode == "Custom" || jumpRotationMode == "Custom"
+
+    private val supportsAdvancedRotations: Boolean
+        get() = options.rotationMode == "Advanced" || jumpRotationMode == "Advanced"
+
+    private val isGodBridgeBehaviorEnabled: Boolean
+        get() = scaffoldMode == "GodBridge" || activeRotationMode == "GodBridge"
+
+    private val usesLegacyRotationPlacement: Boolean
+        get() = activeRotationMode in arrayOf("AAC", "Custom", "Advanced", "Backwards")
+
+    private val shouldUseGodBridgeRotations: Boolean
+        get() = activeRotationMode == "GodBridge"
+
+    private var godBridgeTargetRotation: Rotation? = null
+
+    private val isLookingDiagonally: Boolean
+        get() {
+            val player = mc.thePlayer ?: return false
+
+            val directionDegree = MovementUtils.direction.toDegreesF()
+
+            // Round the direction rotation to the nearest multiple of 45 degrees so that way we check if the player faces diagonally
+            val yaw = round(abs(MathHelper.wrapAngleTo180_float(directionDegree)) / 45f) * 45f
+
+            val isYawDiagonal = yaw % 90 != 0f
+            val isMovingDiagonal = player.movementInput.moveForward != 0f && player.movementInput.moveStrafe == 0f
+            val isStrafing = mc.gameSettings.keyBindRight.isKeyDown || mc.gameSettings.keyBindLeft.isKeyDown
+
+            return isYawDiagonal && (isMovingDiagonal || isStrafing)
+        }
+
+    private fun isHalfBlockLevel(y: Double) = abs(y - floor(y) - 0.5) <= 1E-3
+
+    private fun canJumpTwoBlocksHigh(player: net.minecraft.client.entity.EntityPlayerSP): Boolean {
+        val amplifier = player.getActivePotionEffect(Potion.jump)?.amplifier ?: -1
+        val initialMotionY = 0.42 + (amplifier + 1).coerceAtLeast(0) * 0.1
+        return projectedVanillaJumpHeight(initialMotionY) >= 2.0
+    }
+
+    private fun isUsableBlockStack(stack: ItemStack?, fullCubeOnly: Boolean = false): Boolean {
+        val itemBlock = stack?.item as? ItemBlock ?: return false
+        val block = itemBlock.block
+
+        return stack.stackSize > 0
+                && block !in InventoryUtils.BLOCK_BLACKLIST
+                && block !is BlockBush
+                && (!fullCubeOnly || block.isFullCube)
+    }
+
+    // Telly
+    private var ticksUntilJump = 0
+    private var blocksUntilAxisChange = 0
+    private var jumpTicks = jumpTicksRange.random()
+    private var horizontalPlacements = horizontalPlacementsRange.random()
+    private var verticalPlacements = verticalPlacementsRange.random()
+    private var placeYawJitterSteps = 0
+    private val shouldPlaceHorizontally
+        get() = scaffoldMode == "Telly" && mc.thePlayer.isMoving && (startHorizontally && blocksUntilAxisChange <= horizontalPlacements || !startHorizontally && blocksUntilAxisChange > verticalPlacements)
+
+    // <--
+
+    // Enabling module
+    override fun onEnable() {
+        val player = mc.thePlayer ?: return
+
+        launchY = player.posY.roundToInt()
+        blocksUntilAxisChange = 0
+        blocksPlacedUntilJump = 0
+        blocksToJump = blocksToJumpRange.random()
+        godBridgeTargetRotation = null
+        placeRotation = null
+        ticksUntilJump = 0
+        jumpTicks = jumpTicksRange.random()
+    }
+
+    // Events
+    val onUpdate = loopSequence {
+        val player = mc.thePlayer ?: return@loopSequence
+
+        if (mc.playerController.currentGameType == WorldSettings.GameType.SPECTATOR) return@loopSequence
+
+        mc.timer.timerSpeed = timer
+
+        // Telly
+        if (player.onGround) ticksUntilJump++
+
+        if (shouldGoDown) {
+            mc.gameSettings.keyBindSneak.pressed = false
+        }
+
+        if (slow) {
+            if (!slowGround || slowGround && player.onGround) {
+                player.motionX *= slowSpeed
+                player.motionZ *= slowSpeed
             }
         }
 
-        if (clickTimer.hasTimePassed(clickDelay)) {
-            fun sendPacket(c08: C08PacketPlayerBlockPlacement) {
-                if (clickDelay <35) {
-                    PacketUtils.sendPacketNoEvent(c08)
+        // Eagle
+        if (isEagleEnabled) {
+            var dif = 0.5
+            val blockPos = BlockPos(player).down()
+
+            for (side in EnumFacing.values()) {
+                if (side.axis == EnumFacing.Axis.Y) {
+                    continue
                 }
-                if (clickDelay <50) {
-                    PacketUtils.sendPacketNoEvent(c08)
-                }
-                PacketUtils.sendPacketNoEvent(c08)
-            }
-            repeat(extraClickCountValue.get()) {
-                when (extraClickValue.get().lowercase()) {
-                    "emptyc08" -> sendPacket(C08PacketPlayerBlockPlacement(mc.thePlayer.inventory.getStackInSlot(slot)))
-                    "afterplace" -> {
-                        if (afterPlaceC08 != null) {
-                            if (mc.thePlayer.getDistanceSqToCenter(lastPlaceBlock) < 10) {
-                                sendPacket(afterPlaceC08!!)
-                            } else {
-                                afterPlaceC08 = null
-                            }
-                        }
-                    }
-                    "raytrace" -> {
-                        val rayTraceInfo = mc.thePlayer.rayTraceWithServerSideRotation(5.0)
-                        if (BlockUtils.getBlock(rayTraceInfo!!.blockPos) != Blocks.air) {
-                            val blockPos = rayTraceInfo!!.blockPos
-                            val hitVec = rayTraceInfo!!.hitVec
-                            val directionVec = rayTraceInfo!!.sideHit.directionVec
-                            val targetPos = rayTraceInfo!!.blockPos.add(directionVec.x, directionVec.y, directionVec.z)
-                            if (mc.thePlayer.entityBoundingBox.intersectsWith(
-                                    Blocks.stone.getSelectedBoundingBox(
-                                        mc.theWorld,
-                                        targetPos
-                                    )
-                                )
-                            ) {
-                                sendPacket(
-                                    C08PacketPlayerBlockPlacement(
-                                        blockPos,
-                                        rayTraceInfo!!.sideHit.index,
-                                        mc.thePlayer.inventory.getStackInSlot(slot),
-                                        (hitVec.xCoord - blockPos.x.toDouble()).toFloat(),
-                                        (hitVec.yCoord - blockPos.y.toDouble()).toFloat(),
-                                        (hitVec.zCoord - blockPos.z.toDouble()).toFloat()
-                                    )
-                                )
-                            } else {
-                                sendPacket(C08PacketPlayerBlockPlacement(mc.thePlayer.inventory.getStackInSlot(slot)))
-                            }
-                        }
+
+                val neighbor = blockPos.offset(side)
+
+                if (neighbor.isReplaceable) {
+                    val calcDif = (if (side.axis == EnumFacing.Axis.Z) {
+                        abs(neighbor.z + 0.5 - player.posZ)
+                    } else {
+                        abs(neighbor.x + 0.5 - player.posX)
+                    }) - 0.5
+
+                    if (calcDif < dif) {
+                        dif = calcDif
                     }
                 }
             }
-            clickDelay = TimeUtils.randomDelay(extraClickMinDelayValue.get(), extraClickMaxDelayValue.get())
-            clickTimer.reset()
-        }
 
-        mc.thePlayer.isSprinting = canSprint
+            val blockSneaking = TickScheduler.hasScheduled(eagleGroundBlockTask)
+            val alreadySneaking = TickScheduler.hasScheduled(eagleSneakTask)
 
+            val options = mc.gameSettings
 
-        shouldGoDown = downValue.get() && GameSettings.isKeyDown(mc.gameSettings.keyBindSneak) && blocksAmount > 1
-        if (shouldGoDown) mc.gameSettings.keyBindSneak.pressed = false
-        if (mc.thePlayer.onGround) {
-            // Smooth Zitter
-            if (zitterModeValue.equals("smooth")) {
-                if (!GameSettings.isKeyDown(mc.gameSettings.keyBindRight)) mc.gameSettings.keyBindRight.pressed = false
-                if (!GameSettings.isKeyDown(mc.gameSettings.keyBindLeft)) mc.gameSettings.keyBindLeft.pressed = false
-                if (zitterTimer.hasTimePassed(100)) {
-                    zitterDirection = !zitterDirection
-                    zitterTimer.reset()
+            run {
+                if (placedBlocksWithoutEagle < blocksToEagle.random() && !alreadySneaking && !blockSneaking && !eagleSneaking && !requestedStopSneak) {
+                    return@run
                 }
-                if (zitterDirection) {
-                    mc.gameSettings.keyBindRight.pressed = true
-                    mc.gameSettings.keyBindLeft.pressed = false
-                } else {
-                    mc.gameSettings.keyBindRight.pressed = false
-                    mc.gameSettings.keyBindLeft.pressed = true
-                }
-            }
 
-            // Eagle
-            if (!eagleValue.equals("off") && !shouldGoDown) {
-                if (placedBlocksWithoutEagle >= blocksToEagleValue.get()) {
-                    val shouldEagle = mc.theWorld.getBlockState(
-                        BlockPos(
-                            mc.thePlayer.posX,
-                            mc.thePlayer.posY - 1.0, mc.thePlayer.posZ
+                val eagleCondition = when (eagleMode) {
+                    "OnGround" -> player.onGround
+                    "InAir" -> !player.onGround
+                    else -> true
+                }
+
+                // For better sneak support we could move this to MovementInputEvent
+                val pressedOnKeyboard = Keyboard.isKeyDown(options.keyBindSneak.keyCode)
+
+                var shouldEagle =
+                    eagleCondition && (blockPos.isReplaceable || dif < edgeDistance) || pressedOnKeyboard
+
+                val shouldSchedule = !requestedStopSneak
+
+                if (requestedStopSneak) {
+                    requestedStopSneak = false
+
+                    if (!player.onGround) {
+                        shouldEagle = pressedOnKeyboard
+                    }
+                } else if (blockSneaking || alreadySneaking) {
+                    return@run
+                }
+
+                if (eagle == "Silent") {
+                    if (eagleSneaking != shouldEagle) {
+                        sendPacket(
+                            C0BPacketEntityAction(
+                                player, if (shouldEagle) {
+                                    C0BPacketEntityAction.Action.START_SNEAKING
+                                } else {
+                                    C0BPacketEntityAction.Action.STOP_SNEAKING
+                                }
+                            )
                         )
-                    ).block === Blocks.air
-                    if (eagleValue.equals("silent")) {
-                        if (eagleSneaking != shouldEagle) {
-                            mc.netHandler.addToSendQueue(C0BPacketEntityAction(mc.thePlayer, if (shouldEagle) C0BPacketEntityAction.Action.START_SNEAKING else C0BPacketEntityAction.Action.STOP_SNEAKING))
+
+                        // Adjust speed when silent sneaking
+                        if (adjustedSneakSpeed && shouldEagle) {
+                            player.motionX *= eagleSpeed
+                            player.motionZ *= eagleSpeed
                         }
-                        eagleSneaking = shouldEagle
-                    } else mc.gameSettings.keyBindSneak.pressed = shouldEagle
-                    placedBlocksWithoutEagle = 0
-                } else placedBlocksWithoutEagle++
-            }
+                    }
 
-            // Zitter
-            if (zitterModeValue.equals("teleport")) {
-                MovementUtils.strafe(zitterSpeedValue.get())
-                val yaw = Math.toRadians(mc.thePlayer.rotationYaw + if (zitterDirection) 90.0 else -90.0)
-                mc.thePlayer.motionX -= sin(yaw) * zitterStrengthValue.get()
-                mc.thePlayer.motionZ += cos(yaw) * zitterStrengthValue.get()
-                zitterDirection = !zitterDirection
+                    eagleSneaking = shouldEagle
+                } else {
+                    options.keyBindSneak.pressed = shouldEagle
+                    eagleSneaking = shouldEagle
+                }
+
+                if (eagleSneaking && shouldSchedule) {
+                    if (useMaxSneakTime) {
+                        TickScheduler.scheduleConditional(eagleSneakTask) { elapsed ->
+                            (elapsed >= maxSneakTicks.random() + 1).also { requestedStopSneak = it }
+                        }
+                    }
+
+                    if (blockSneakingAgainUntilOnGround && !player.onGround) {
+                        TickScheduler.scheduleConditional(eagleGroundBlockTask) {
+                            mc.thePlayer?.onGround.also { if (it != false) requestedStopSneak = true } ?: true
+                        }
+                    }
+                }
+
+                placedBlocksWithoutEagle = 0
+            }
+        }
+
+        if (player.onGround) {
+            // Still a thing?
+            if (scaffoldMode == "Rewinside") {
+                MovementUtils.strafe(0.2F)
+                player.motionY = 0.0
             }
         }
     }
 
-    @EventTarget
-    fun onPacket(event: PacketEvent) {
-        if (mc.thePlayer == null) return
-        val packet = event.packet
+    val onStrafe = handler<StrafeEvent> {
+        val player = mc.thePlayer ?: return@handler
 
-        //Verus
-        if (packet is C03PacketPlayer && bypassValue.get()) {
-            if (doSpoof) {
-                packet.onGround = true
-            }
+        if (autoJump && !Tower.isTowering && !shouldGoDown && player.onGround && player.isMoving) {
+            player.tryJump()
         }
 
-        // AutoBlock
-        if (packet is C09PacketHeldItemChange) {
-            if(packet.slotId == slot) {
-                event.cancelEvent()
-            } else {
-                slot = packet.slotId
-            }
-        } else if (packet is C08PacketPlayerBlockPlacement) {
-            // c08 item override to solve issues in scaffold and some other modules, maybe bypass some anticheat in future
-            packet.stack = mc.thePlayer.inventory.mainInventory[slot]
+        // Jumping needs to be done here, so it doesn't get detected by movement-sensitive anti-cheats.
+        // The look has to still be the player's own: TicksUntilRotation keeps it that way on the ground,
+        // and anything aiming early would hold this gate shut for good.
+        val tellyReadyToJump = scaffoldMode == "Telly" && player.onGround && player.isMoving && !Tower.isTowering
+        // Compared within one quantization step, not for equality: the engine hands the look back
+        // snapped to the sensitivity GCD, so an untouched look still reads one step off and an exact
+        // match never holds. A look that is actually moving travels several steps per tick, so this
+        // still keeps the gate shut while aiming.
+        val tellyLookIdle = rotationDifference(currRotation, player.rotation) <= getFixedAngleDelta()
+
+        if (tellyReadyToJump && tellyLookIdle && ticksUntilJump >= jumpTicks) {
+            if (tellyDebug) LOGGER.info(
+                "[TellyDbg] JUMP airTicks=${player.airTicks} tuj=$ticksUntilJump jt=$jumpTicks " +
+                    "placeRot=${placeRotation != null}"
+            )
+            player.tryJump()
+
+            ticksUntilJump = 0
+            jumpTicks = jumpTicksRange.random()
+        } else if (tellyReadyToJump && tellyDebug) {
+            LOGGER.info(
+                "[TellyDbg] JUMP-BLOCKED curRot=$currRotation playerRot=${player.rotation} " +
+                    "tuj=$ticksUntilJump jt=$jumpTicks"
+            )
+        }
+
+        // Sprint: keep momentum up while bridging forwards.
+        if (scaffoldMode == "Sprint" && player.onGround && player.isMoving) {
+            player.isSprinting = true
+        }
+
+        // Jump: hop along the bridge for a higher, faster line.
+        if (scaffoldMode == "Jump" && player.onGround && player.isMoving && !shouldGoDown) {
+            player.tryJump()
         }
     }
 
-    @EventTarget
-    fun onMotion(event: MotionEvent) {
-        val eventState = event.eventState
-        towerStatus = false
-        if (boostValue.get()) MovementUtils.setMotion(0.172)
-        // Tower
-        if (motionSpeedEnabledValue.get()) MovementUtils.setMotion(motionSpeedValue.get().toDouble())
-        towerStatus = (!stopWhenBlockAboveValue.get() || BlockUtils.getBlock(BlockPos(mc.thePlayer.posX, mc.thePlayer.posY + 2, mc.thePlayer.posZ)) is BlockAir)
-        if (towerStatus) {
-            // further checks
-            when (towerActiveValue.get().lowercase()) {
-                "off" -> towerStatus = false
-                "always" -> {
-                    towerStatus = (mc.gameSettings.keyBindLeft.isKeyDown ||
-                            mc.gameSettings.keyBindRight.isKeyDown || mc.gameSettings.keyBindForward.isKeyDown ||
-                            mc.gameSettings.keyBindBack.isKeyDown)
-                }
-                "pressspace" -> {
-                    towerStatus = mc.gameSettings.keyBindJump.isKeyDown
-                }
-                "nomove" -> {
-                    towerStatus = !(mc.gameSettings.keyBindLeft.isKeyDown ||
-                            mc.gameSettings.keyBindRight.isKeyDown || mc.gameSettings.keyBindForward.isKeyDown ||
-                            mc.gameSettings.keyBindBack.isKeyDown) && mc.gameSettings.keyBindJump.isKeyDown
-                }
+    val onRotationUpdate = handler<RotationUpdateEvent> {
+        val player = mc.thePlayer ?: return@handler
+
+        if (player.ticksExisted == 1) {
+            launchY = player.posY.roundToInt()
+        }
+
+        update()
+
+        val ticks = if (scaffoldMode == "Telly") 1 else options.effectiveResetTicks
+
+        if (!Tower.isTowering && shouldUseGodBridgeRotations && currentRotationsActive) {
+            generateGodBridgeRotations(ticks)
+
+            return@handler
+        }
+
+        if (currentRotationsActive) {
+            val placeRot = this.placeRotation
+
+            if (placeRot != null) {
+                setRotation(placeRot.rotation, ticks)
+            } else if (scaffoldMode == "Telly" && RotationUtils.currentRotation != null) {
+                // Target gone (block placed or nothing to place): flick back instantly like a real
+                // telly player instead of letting the reset path crawl for several ticks, which kept
+                // the engine busy and blocked the next jump.
+                RotationUtils.cancelTargetRotation(options, immediate = true)
             }
         }
-        if (towerStatus) move()
+    }
 
-        // Lock Rotation
-        if (rotationsValue.get() != "None" && keepLengthValue.get()> 0 && lockRotation != null && silentRotationValue.get()) {
-            val limitedRotation = RotationUtils.limitAngleChange(RotationUtils.serverRotation, lockRotation, rotationSpeed)
-            RotationUtils.setTargetRotation(limitedRotation, keepLengthValue.get())
+    val onTick = handler<GameTickEvent> {
+        val target = placeRotation?.placeInfo
+
+        val raycastProperly =
+            !(scaffoldMode == "Expand" && expandLength > 1 || shouldGoDown) && currentRotationsActive && !usesLegacyRotationPlacement
+
+        /**
+         * Calculate block raytracing process once to simulate proper vanilla ray-cast update logic.
+         *
+         * @see net.minecraft.client.Minecraft.runTick Line 1345
+         */
+        val onTickRotation = if (shouldUseModernOnTickRotation && target != null) {
+            placeRotation?.rotation?.copy()?.fixedSensitivity()
+        } else {
+            null
         }
 
-        // Update and search for new block
-        if (event.eventState == EventState.PRE) update()
+        // Gate the placement raycast on the rotation the server actually holds this tick
+        // (serverRotation = the last rotation dispatched on the wire), NOT on the still-interpolating
+        // target. The place packet leaves this GameTickEvent before the tick's own movement packet, so
+        // the server re-runs its block raytrace from serverRotation; placing straight from the target
+        // makes that server-side raytrace miss and the placement is silently rejected (the block "tries"
+        // to place but never appears, and stricter anticheat flags the mismatch). We only place once the
+        // smoothed rotation has genuinely reached the block on the server side; the engine keeps driving
+        // the rotation toward the target through the normal setRotation path, so convergence is quick.
+        //
+        // Telly is the exception: it picks a new block and flicks to it within the same jump, so the
+        // rotation the server holds is always the previous one and this raycast would test last tick's
+        // aim against this tick's target — which never matches, and nothing is ever placed.
+        val raycastRotation = onTickRotation
+            ?: (RotationUtils.serverRotation.copy()
+                .takeIf { raycastProperly && target != null && scaffoldMode != "Telly" })
+            ?: currRotation
+        val raycast = performBlockRaytrace(raycastRotation, mc.playerController.blockReachDistance)
 
-        // Place block
-        if (!towerStatus)
-        {
-            when (placeModeValue.get()) {
-                "Pre" -> if (event.eventState == EventState.PRE) place()
-                "Post" -> if (event.eventState == EventState.POST) place()
-                "All" -> place()
+        var alreadyPlaced = false
+
+        if (extraClicks) {
+            val doubleClick = if (simulateDoubleClicking) RandomUtils.nextInt(-1, 1) else 0
+
+            val clicks = extraClick.clicks + doubleClick
+
+            repeat(clicks) {
+                extraClick.clicks--
+
+                doPlaceAttempt(raycast, it + 1 == clicks) { alreadyPlaced = true }
             }
         }
 
-        if (towerStatus) {
-            when (towerPlaceModeValue.get()) {
-                "Pre" -> if (event.eventState == EventState.PRE) place()
-                "Post" -> if (event.eventState == EventState.POST) place()
-                "All" -> place()
-            }
-        }
-
-        // Reset placeable delay
-        if (targetPlace == null && !placeableDelayValue.equals("OFF") && (!placeDelayTower.get() || !towerStatus)) {
-            if (placeableDelayValue.equals("Smart")) {
-                if (lastPlace == 0) {
-                    delayTimer.reset()
-                }
-            } else {
+        if (target == null) {
+            if (placeDelayValue.isActive()) {
                 delayTimer.reset()
             }
+            return@handler
         }
 
-        LiquidBounce.moduleManager[StrafeFix::class.java]!!.applyForceStrafe(!rotationsValue.equals("None"), moveFixValue.get())
+        // Change/Schedule slot once per tick according to vanilla-logic
+        if (alreadyPlaced || SilentHotbar.modifiedThisTick) {
+            return@handler
+        }
+
+        raycast.let {
+            // Telly places PRE-flying (this GameTickEvent runs before the tick's movement packet), so
+            // no extra packet is needed and Grim's Post check stays happy. The server re-runs the place
+            // raytrace from the rotation it already holds (serverRotation, which is what we raycast
+            // from), so we require the raycast to actually land on the intended target; the hit face
+            // and hitVec come from our own raytrace so they are identical to the server's. Placing at
+            // whatever the raytrace happened to hit (looser) made the server disagree on the block and
+            // flooded RotationPlace, because the player's position drifts ahead of what the server has.
+            // Telly is exempt from the face check: the block is chosen mid-jump while the position is
+            // still moving, so the face the raytrace lands on is often a neighbouring one even when the
+            // block itself matches. Requiring the exact face here drops almost every placement.
+            val sideOk = !raycastProperly || it?.sideHit == target.enumFacing || scaffoldMode == "Telly"
+            val gatePass = !currentRotationsActive || it != null && it.typeOfHit.isBlock &&
+                it.blockPos == target.blockPos && sideOk
+
+            if (tellyDebug && scaffoldMode == "Telly") {
+                LOGGER.info(
+                    "[TellyDbg] GATE pass=$gatePass airTicks=${mc.thePlayer?.airTicks} onGround=${mc.thePlayer?.onGround} " +
+                        "hit=${it?.blockPos} target=${target.blockPos} side=${it?.sideHit}/${target.enumFacing} " +
+                        "srvRot=${RotationUtils.serverRotation}"
+                )
+            }
+
+            if (gatePass) {
+                val result = if (raycastProperly && it != null) {
+                    PlaceInfo(it.blockPos, it.sideHit, it.hitVec)
+                } else {
+                    target
+                }
+
+                if (onTickRotation != null && !applyModernOnTickRotation(onTickRotation)) {
+                    return@handler
+                }
+
+                place(result)
+
+                if (onTickRotation != null && rotationTiming == "OnTick") {
+                    restoreModernOnTickRotation()
+                }
+            }
+        }
     }
 
-    private fun fakeJump() {
-        if (!towerFakeJumpValue.get()) {
+    val onSneakSlowDown = handler<SneakSlowDownEvent> { event ->
+        if (!isEagleEnabled || eagle != "Normal") {
+            return@handler
+        }
+
+        event.forward *= eagleSpeed / 0.3f
+        event.strafe *= eagleSpeed / 0.3f
+    }
+
+    val onMovementInput = handler<MovementInputEvent> { event ->
+        val player = mc.thePlayer ?: return@handler
+
+        // Sneak: hold sneak on the ground so you never walk off the edge while bridging.
+        if (scaffoldMode == "Sneak") {
+            if (player.onGround) {
+                event.originalInput.sneak = true
+            }
+            return@handler
+        }
+
+        // Breezily: sneak as you reach the leading edge of the block so the next block places
+        // at extended reach. Use with Eagle off so the two don't fight over the sneak key.
+        if (scaffoldMode == "Breezily") {
+            if (player.onGround && player.isMoving) {
+                val edge = breezilyEdge.toDouble()
+                val fracX = player.posX - Math.floor(player.posX)
+                val fracZ = player.posZ - Math.floor(player.posZ)
+                if (fracX < edge || fracX > 1.0 - edge || fracZ < edge || fracZ > 1.0 - edge) {
+                    event.originalInput.sneak = true
+                }
+            }
+            return@handler
+        }
+
+        if (!isGodBridgeBehaviorEnabled || !player.onGround) return@handler
+
+        if (waitForRots) {
+            godBridgeTargetRotation?.run {
+                event.originalInput.sneak =
+                    event.originalInput.sneak || rotationDifference(this, currRotation) > getFixedAngleDelta()
+            }
+        }
+
+        val simPlayer = SimulatedPlayer.fromClientPlayer(RotationUtils.modifiedInput)
+
+        simPlayer.rotationYaw = currRotation.yaw
+
+        simPlayer.tick()
+
+        val shouldTriggerMovement = if (isManualJumpOptionActive) {
+            blocksPlacedUntilJump >= blocksToJump
+        } else {
+            !simPlayer.onGround
+        }
+
+        if (shouldTriggerMovement) {
+            // Strong Jump Boost can clear two blocks and break the bridge rhythm.
+            val shouldAvoidJump = isLookingDiagonally || canJumpTwoBlocksHigh(player)
+
+            when (godbridgeMovementMode) {
+                "Jump" -> if (shouldAvoidJump) {
+                    event.originalInput.sneak = true
+                } else {
+                    event.originalInput.jump = true
+                }
+                "Sneak" -> event.originalInput.sneak = true
+                "Both" -> {
+                    if (!shouldAvoidJump && RandomUtils.nextBoolean()) {
+                        event.originalInput.jump = true
+                    } else {
+                        event.originalInput.sneak = true
+                    }
+                }
+            }
+
+            blocksPlacedUntilJump = 0
+
+            blocksToJump = blocksToJumpRange.random()
+        }
+    }
+
+    fun update() {
+        val player = mc.thePlayer ?: return
+        val holdingItem = player.heldItem?.item is ItemBlock
+
+        if (!holdingItem && (autoBlock == "Off" || InventoryUtils.findBlockInHotbar() == null)) {
             return
         }
 
-        mc.thePlayer.isAirBorne = true
-        mc.thePlayer.triggerAchievement(StatList.jumpStat)
+        findBlock(scaffoldMode == "Expand" && expandLength > 1, searchMode == "Area")
     }
 
-    fun getRandomHypixelValues(): Double {
-        val secureRandom = SecureRandom()
-        var value = secureRandom.nextDouble() * (1.0 / System.currentTimeMillis())
-        for (i in 0 until RandomUtils.nextDouble(
-            RandomUtils.nextDouble(4.0, 6.0),
-            RandomUtils.nextDouble(8.0, 20.0)
-        ).toInt()) value *= 1.0 / System.currentTimeMillis()
-        return value
-    }
+    private fun setRotation(rotation: Rotation, ticks: Int) {
+        val player = mc.thePlayer ?: return
 
-    private fun move() {
-        when (towerModeValue.get().lowercase()) {
-            "none" -> {
-                if (mc.thePlayer.onGround) {
-                    fakeJump()
-                    mc.thePlayer.motionY = 0.42
-                }
+        // Telly aims late on purpose. While the look is untouched the jump gate below sees the engine
+        // matching the player's own rotation and fires; the moment something aims down, that gate stops
+        // matching and the jump never happens. Holding the aim for the first air ticks also means the
+        // block is chosen from where the jump actually took us, not from mid-rotation.
+        if (scaffoldMode == "Telly" && player.isMoving && !Tower.isTowering) {
+            if (player.airTicks < ticksUntilRotation.random() && ticksUntilJump >= jumpTicks) {
+                return
             }
-            "vanilla" -> {
-                if (mc.thePlayer.onGround) {
-                    mc.thePlayer.motionY = 0.42
-                }
-            }
-            "ncp"-> {
-                if (mc.thePlayer.posY % 1 <= 0.00153598) {
-                    mc.thePlayer.setPosition(mc.thePlayer.posX, Math.floor(mc.thePlayer.posY), mc.thePlayer.posZ)
-                    mc.thePlayer.motionY = 0.41998f - getRandomHypixelValues() / 2
-                } else if (mc.thePlayer.posY % 1 < 0.1 && !MovementUtils.isOnGround(0.0)) {
-                    mc.thePlayer.setPosition(mc.thePlayer.posX, Math.floor(mc.thePlayer.posY), mc.thePlayer.posZ)
-                }
-            }
-            "jump" -> {
-                if (mc.thePlayer.onGround && towerTimer.hasTimePassed(jumpDelayValue.get())) {
-                    fakeJump()
-                    mc.thePlayer.motionY = jumpMotionValue.get().toDouble()
-                    towerTimer.reset()
-                }
-            }
-            "motion" -> {
-                if (mc.thePlayer.onGround) {
-                    fakeJump()
-                    mc.thePlayer.motionY = 0.42
-                } else if (mc.thePlayer.motionY < 0.1) {
-                    mc.thePlayer.motionY = -0.3
-                }
-            }
-            "motiontp" -> {
-                if (mc.thePlayer.onGround) {
-                    fakeJump()
-                    mc.thePlayer.motionY = 0.42
-                } else if (mc.thePlayer.motionY < 0.23) {
-                    mc.thePlayer.setPosition(mc.thePlayer.posX, truncate(mc.thePlayer.posY), mc.thePlayer.posZ)
-                }
-            }
-            "motiontp2" -> {
-                if (mc.thePlayer.onGround) {
-                    fakeJump()
-                    mc.thePlayer.motionY = 0.41999998688698
-                } else if (mc.thePlayer.motionY < 0.23) {
-                    mc.thePlayer.setPosition(mc.thePlayer.posX, truncate(mc.thePlayer.posY), mc.thePlayer.posZ)
-                    mc.thePlayer.onGround = true
-                    mc.thePlayer.motionY = 0.41999998688698
-                }
-            }
-            "packet" -> {
-                if (mc.thePlayer.onGround && towerTimer.hasTimePassed(2)) {
-                    fakeJump()
-                    mc.netHandler.addToSendQueue(C04PacketPlayerPosition(mc.thePlayer.posX, mc.thePlayer.posY + 0.42, mc.thePlayer.posZ, false))
-                    mc.netHandler.addToSendQueue(C04PacketPlayerPosition(mc.thePlayer.posX, mc.thePlayer.posY + 0.753, mc.thePlayer.posZ, false))
-                    mc.thePlayer.setPosition(mc.thePlayer.posX, mc.thePlayer.posY + 1.0, mc.thePlayer.posZ)
-                    towerTimer.reset()
-                }
-            }
-            "teleport" -> {
-                if (teleportNoMotionValue.get()) mc.thePlayer.motionY = 0.0
-                if ((mc.thePlayer.onGround || !teleportGroundValue.get()) && towerTimer.hasTimePassed(teleportDelayValue.get())) {
-                    fakeJump()
-                    mc.thePlayer.setPositionAndUpdate(
-                        mc.thePlayer.posX,
-                        mc.thePlayer.posY + teleportHeightValue.get(),
-                        mc.thePlayer.posZ
-                    )
-                    towerTimer.reset()
-                }
-            }
-            "watchdog" -> {
-                fakeJump()
-                if (!mc.gameSettings.keyBindJump.isKeyDown) return
 
-                mc.netHandler.addToSendQueue(C08PacketPlayerBlockPlacement(mc.thePlayer.heldItem))
-                mc.thePlayer.motionY = 0.42
-            }
-            "constantmotion" -> {
-                if (mc.thePlayer.onGround) {
-                    fakeJump()
-                    jumpGround = mc.thePlayer.posY
-                    mc.thePlayer.motionY = constantMotionValue.get().toDouble()
-                }
-                if (mc.thePlayer.posY > jumpGround + constantMotionJumpGroundValue.get()) {
-                    fakeJump()
-                    mc.thePlayer.setPosition(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ)
-                    mc.thePlayer.motionY = constantMotionValue.get().toDouble()
-                    jumpGround = mc.thePlayer.posY
-                }
-            }
-            "plusmotion" -> {
-                mc.thePlayer.motionY += plusMotionValue.get()
-                if (mc.thePlayer.motionY >= plusMaxMotionValue.get()) {
-                    mc.thePlayer.motionY = plusMaxMotionValue.get().toDouble()
-                }
-                fakeJump()
-            }
-            "stablemotion" -> {
-                mc.thePlayer.motionY = stableMotionValue.get().toDouble()
-                fakeJump()
-            }
-            "aac3.3.9" -> {
-                if (mc.thePlayer.onGround) {
-                    fakeJump()
-                    mc.thePlayer.motionY = 0.4001
-                }
-                mc.timer.timerSpeed = 1f
-                if (mc.thePlayer.motionY < 0) {
-                    mc.thePlayer.motionY -= 0.00000945
-                    mc.timer.timerSpeed = 1.6f
-                }
-            }
-            "aac3.6.4" -> {
-                if (mc.thePlayer.ticksExisted % 4 == 1) {
-                    mc.thePlayer.motionY = 0.4195464
-                    mc.thePlayer.setPosition(mc.thePlayer.posX - 0.035, mc.thePlayer.posY, mc.thePlayer.posZ)
-                } else if (mc.thePlayer.ticksExisted % 4 == 0) {
-                    mc.thePlayer.motionY = -0.5
-                    mc.thePlayer.setPosition(mc.thePlayer.posX + 0.035, mc.thePlayer.posY, mc.thePlayer.posZ)
-                }
-            }
-            "aac4.4constant" -> {
-                if (mc.thePlayer.onGround) {
-                    fakeJump()
-                    jumpGround = mc.thePlayer.posY
-                    mc.thePlayer.motionY = 0.42
-                }
-                mc.thePlayer.motionX = 0.0
-                mc.thePlayer.motionZ = -0.00000001
-                mc.thePlayer.jumpMovementFactor = 0.000F
-                mc.timer.timerSpeed = 0.60f
-                if (mc.thePlayer.posY > jumpGround + 0.99) {
-                    fakeJump()
-                    mc.thePlayer.setPosition(mc.thePlayer.posX, mc.thePlayer.posY - 0.001335979112146, mc.thePlayer.posZ)
-                    mc.thePlayer.motionY = 0.42
-                    jumpGround = mc.thePlayer.posY
-                    mc.timer.timerSpeed = 0.75f
-                }
-            }
-            "verus" -> {
-                mc.thePlayer.setPosition(mc.thePlayer.posX, (mc.thePlayer.posY * 2).roundToInt().toDouble() / 2, mc.thePlayer.posZ)
-                if (mc.thePlayer.ticksExisted % 2 == 0) {
-                    mc.thePlayer.motionY = 0.5
-                    mc.timer.timerSpeed = 0.8f
-                    doSpoof = false
-                }else{
-                    mc.timer.timerSpeed = 1.33f
-                    mc.thePlayer.motionY = 0.0
-                    mc.thePlayer.onGround = true
-                    doSpoof = true
-                }
-            }
-            "aac4jump" -> {
-                mc.timer.timerSpeed = 0.97f
-                if (mc.thePlayer.onGround) {
-                    fakeJump()
-                    mc.thePlayer.motionY = 0.387565
-                    mc.timer.timerSpeed = 1.05f
-                }
-            }
-            "universo" -> {
-                if (mc.thePlayer.onGround) {
-                    fakeJump()
-                    mc.thePlayer.motionY = 0.41999998688698
-                } else if (mc.thePlayer.motionY < 0.19) {
-                    mc.thePlayer.setPosition(mc.thePlayer.posX, truncate(mc.thePlayer.posY), mc.thePlayer.posZ)
-                    mc.thePlayer.onGround = true
-                    mc.thePlayer.motionY = 0.41999998688698
-                }
-            }
-            "matrix" -> {
-                if (mc.thePlayer.onGround) {
-                    fakeJump()
-                    mc.thePlayer.motionY = 0.42
-                } else if (mc.thePlayer.motionY < 0.19145141919180) {
-                    mc.thePlayer.setPosition(mc.thePlayer.posX, truncate(mc.thePlayer.posY), mc.thePlayer.posZ)
-                    mc.thePlayer.onGround = true
-                    mc.thePlayer.motionY = 0.481145141919180
-                }
-            }
+            // Snap once the hold is over. Smoothing walks the aim toward the block a few degrees per
+            // tick, so the raytrace keeps landing on whatever is under the old aim and the placement
+            // gate never sees the target before the jump is spent — the aim has to arrive at once.
+            options.instant = true
         }
-    }
 
-    private fun update() {
-        if (if (!autoBlockValue.equals("off")) InventoryUtils.findAutoBlockBlock() == -1 else mc.thePlayer.heldItem == null ||
-                    !(mc.thePlayer.heldItem.item is ItemBlock && !InventoryUtils.isBlockListBlock(mc.thePlayer.heldItem.item as ItemBlock))) {
+        if (shouldUseModernOnTickRotation) {
             return
         }
 
-        findBlock(expandLengthValue.get()> 1)
+        setTargetRotation(rotation, options, ticks)
+    }
+
+    private val shouldUseModernOnTickRotation: Boolean
+        get() = rotationTiming != "Normal"
+
+    private fun applyModernOnTickRotation(rotation: Rotation): Boolean {
+        val player = mc.thePlayer ?: return false
+
+        if (!RotationUtils.canRequestRotation(options)) {
+            return false
+        }
+
+        if (rotationDifference(rotation, RotationUtils.serverRotation) > getFixedAngleDelta()) {
+            // This raw send bypasses the PacketEvent bus (RotationUtils.onPacket), so unwrap the yaw
+            // here the same way onPacket does: emit the shortest continuous offset from the last yaw
+            // the server holds, so the wire delta stays <= 180 and never seam-jumps (GrimAC AimModulo360).
+            val sr = RotationUtils.serverRotation
+            val continuousYaw = sr.yaw + RotationUtils.angleDifference(rotation.yaw, sr.yaw)
+            sendPacket(
+                C06PacketPlayerPosLook(
+                    player.posX, player.posY, player.posZ,
+                    continuousYaw, rotation.pitch,
+                    player.onGround
+                ),
+                false
+            )
+            RotationUtils.serverRotation = Rotation(continuousYaw, rotation.pitch)
+            // The raw send already delivered this rotation; sync the client's last-reported look so the
+            // same-tick movement packet emits a position-only update instead of re-sending an identical
+            // look (GrimAC AimDuplicateLook = from==to).
+            (player as? IMixinEntityPlayerSP)?.syncLastReportedRotation(rotation.yaw, rotation.pitch)
+        }
+
+        if (rotationTiming == "OnTickSnap") {
+            if (!setTargetRotation(rotation, options, options.effectiveResetTicks)) {
+                return false
+            }
+
+            RotationUtils.currentRotation = rotation.copy()
+        }
+
+        return true
+    }
+
+    private fun restoreModernOnTickRotation() {
+        val player = mc.thePlayer ?: return
+        val rotation = player.rotation.fixedSensitivity()
+
+        if (rotationDifference(rotation, RotationUtils.serverRotation) <= getFixedAngleDelta()) {
+            return
+        }
+
+        // Raw send bypasses onPacket; unwrap the yaw to a continuous offset (GrimAC AimModulo360).
+        val sr = RotationUtils.serverRotation
+        val continuousYaw = sr.yaw + RotationUtils.angleDifference(rotation.yaw, sr.yaw)
+        sendPacket(
+            C06PacketPlayerPosLook(
+                player.posX, player.posY, player.posZ,
+                continuousYaw, rotation.pitch,
+                player.onGround
+            ),
+            false
+        )
+        RotationUtils.serverRotation = Rotation(continuousYaw, rotation.pitch)
+        (player as? IMixinEntityPlayerSP)?.syncLastReportedRotation(rotation.yaw, rotation.pitch)
+    }
+
+    // Search for new target block
+    private fun searchExpand(player: EntityPlayerSP, blockPosition: BlockPos, area: Boolean) {
+        val yaw = player.rotationYaw.toRadiansD()
+        val x = if (omniDirectionalExpand) -sin(yaw).roundToInt() else player.horizontalFacing.directionVec.x
+        val z = if (omniDirectionalExpand) cos(yaw).roundToInt() else player.horizontalFacing.directionVec.z
+
+        repeat(expandLength) {
+            if (search(blockPosition.add(x * it, 0, z * it), false, area)) return
+        }
+        placeRotation = null
     }
 
     /**
-     * Search for new target block
+     * Airborne Telly pins the target to the level it jumped from, so the bridge stays flat instead of
+     * following the jump arc upwards and stacking into a tower. Towering wants that climb, so it keeps
+     * the level tracking the player, otherwise the target stays under the old floor and nothing can be
+     * placed to stand on.
      */
-    private fun findBlock(expand: Boolean) {
-        val blockPosition = if (shouldGoDown) {
-            if (mc.thePlayer.posY == mc.thePlayer.posY.toInt() + 0.5) {
-                BlockPos(mc.thePlayer.posX, mc.thePlayer.posY - 0.6, mc.thePlayer.posZ)
-            } else {
-                BlockPos(mc.thePlayer.posX, mc.thePlayer.posY - 0.6, mc.thePlayer.posZ).down()
-            }
-        } else if (mc.thePlayer.posY == mc.thePlayer.posY.toInt() + 0.5 && !canSameY) {
-            BlockPos(mc.thePlayer)
-        } else if (canSameY && lastGroundY <= mc.thePlayer.posY) {
-            BlockPos(mc.thePlayer.posX, lastGroundY - 1.0, mc.thePlayer.posZ)
-        } else {
-            BlockPos(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ).down()
+    private val tellyPinsLaunchLevel: Boolean
+        get() {
+            val player = mc.thePlayer ?: return false
+
+            return scaffoldMode == "Telly" && !player.onGround && !Tower.isTowering
         }
-        if (!expand && (!BlockUtils.isReplaceable(blockPosition) || search(blockPosition, !shouldGoDown))) return
-        if (expand) {
-            for (i in 0 until expandLengthValue.get()) {
-                if (search(blockPosition.add(if (mc.thePlayer.horizontalFacing == EnumFacing.WEST) -i else if (mc.thePlayer.horizontalFacing == EnumFacing.EAST) i else 0,
-                        0, if (mc.thePlayer.horizontalFacing == EnumFacing.NORTH) -i else if (mc.thePlayer.horizontalFacing == EnumFacing.SOUTH) i else 0), false)) {
+
+    private fun findBlock(expand: Boolean, area: Boolean) {
+        val player = mc.thePlayer ?: return
+
+        if (!shouldKeepLaunchPosition && !tellyPinsLaunchLevel) {
+            launchY = player.posY.roundToInt()
+        }
+
+        val blockPosition = if (shouldGoDown) {
+            if (isHalfBlockLevel(player.posY)) {
+                BlockPos(player.posX, player.posY - 0.6, player.posZ)
+            } else {
+                BlockPos(player.posX, player.posY - 0.6, player.posZ).down()
+            }
+        } else if (shouldKeepLaunchPosition && launchY <= player.posY) {
+            BlockPos(player.posX, launchY - 1.0, player.posZ)
+        } else if (tellyPinsLaunchLevel) {
+            BlockPos(player.posX, launchY - 1.0, player.posZ)
+        } else if (isHalfBlockLevel(player.posY)) {
+            BlockPos(player)
+        } else {
+            BlockPos(player).down()
+        }
+
+        // Every "nothing to place" exit must clear the previous target: a stale placeRotation keeps
+        // the engine aiming at an unreachable old block, which locks the Telly jump gate (the engine
+        // never goes idle) and feeds the placement gate a target the raycast can never hit again.
+        if (!expand) {
+            if (blockPosition.isReplaceable) {
+                if (search(blockPosition, !shouldGoDown, area, shouldPlaceHorizontally)) {
                     return
                 }
-            }
-        } else if (searchValue.get()) {
-            for (x in -1..1) {
-                for (z in -1..1) {
-                    if (search(blockPosition.add(x, 0, z), !shouldGoDown)) {
-                        return
-                    }
-                }
+            } else if (scaffoldMode != "Telly") {
+                // A solid anchor means nothing to fill right here. For Telly that just means we are
+                // standing over the bridge, so fall through to the box search below to find the
+                // leading-edge air cell ahead; clamping the anchor to the (solid) launch level was
+                // otherwise bailing out before ever finding the next block to place.
+                placeRotation = null
+                return
             }
         }
+
+        if (expand) {
+            searchExpand(player, blockPosition, area)
+            return
+        }
+
+        val (horizontal, vertical) = if (scaffoldMode == "Telly") {
+            5 to 3
+        } else if (allowClutching) {
+            horizontalClutchBlocks to verticalClutchBlocks
+        } else {
+            1 to 1
+        }
+
+        BlockPos.getAllInBox(
+            blockPosition.add(-horizontal, 0, -horizontal), blockPosition.add(horizontal, -vertical, horizontal)
+        ).sortedBy {
+            BlockUtils.getCenterDistance(it)
+        }.forEach {
+            // A solid candidate near the center means the bridge is continuous there; keep the last
+            // valid target (the direct fill search above can fail on odd face angles for a tick or
+            // two) instead of nulling, or the target flickers and the engine never converges.
+            if (it.canBeClicked() || search(it, !shouldGoDown, area, shouldPlaceHorizontally)) {
+                return
+            }
+        }
+
+        placeRotation = null
     }
 
-    /**
-     * Place target block
-     */
-    private fun place() {
-        if (targetPlace == null) {
-            if (!placeableDelayValue.equals("OFF")) {
-                if (lastPlace == 0 && placeableDelayValue.equals("Smart")) delayTimer.reset()
-                if (placeableDelayValue.equals("Normal")) delayTimer.reset()
-                if (lastPlace> 0) lastPlace--
-            }
-            return
-        }
-        if (!delayTimer.hasTimePassed(delay) || !towerStatus && canSameY && lastGroundY - 1 != targetPlace!!.vec3.yCoord.toInt()) {
-            return
-        }
+    private fun place(placeInfo: PlaceInfo) {
+        val player = mc.thePlayer ?: return
+        val world = mc.theWorld ?: return
 
-        if (!rotationsValue.equals("None")) {
-            val rayTraceInfo = mc.thePlayer.rayTraceWithServerSideRotation(5.0)
-            when (hitableCheckValue.get().lowercase()) {
-                "simple" -> {
-                    if (!rayTraceInfo!!.blockPos.equals(targetPlace!!.blockPos)) {
-                        return
-                    }
-                }
-                "strict" -> {
-                    if (!rayTraceInfo!!.blockPos.equals(targetPlace!!.blockPos) || rayTraceInfo!!.sideHit != targetPlace!!.enumFacing) {
-                        return
-                    }
-                }
-            }
-        }
+        if (!delayTimer.hasTimePassed() || shouldKeepLaunchPosition && launchY - 1 != placeInfo.vec3.yCoord.toInt() && scaffoldMode != "Expand") return
 
-        val isDynamicSprint = sprintValue.equals("dynamic")
-        var blockSlot = -1
-        var itemStack = mc.thePlayer.heldItem
-        if (mc.thePlayer.heldItem == null || !(mc.thePlayer.heldItem.item is ItemBlock && !InventoryUtils.isBlockListBlock(mc.thePlayer.heldItem.item as ItemBlock))) {
-            if (autoBlockValue.equals("off")) return
-            blockSlot = InventoryUtils.findAutoBlockBlock()
-            if (blockSlot == -1) return
-            if (autoBlockValue.equals("LiteSpoof") || autoBlockValue.equals("Spoof")) {
-                mc.netHandler.addToSendQueue(C09PacketHeldItemChange(blockSlot - 36))
+        val currentSlot = SilentHotbar.currentSlot
+
+        var stack = player.hotBarSlot(currentSlot).stack
+
+        // Determine whether the slot the block is held in must be (re)selected before placing.
+        // When AutoBlock is active we must guarantee the held block slot is actually selected, otherwise
+        // the placement happens with the wrong/empty hand and gets flagged. The currently held stack being a
+        // usable block is not enough on its own: if no AutoBlock state is enforced yet for this module, the
+        // slot still has to be asserted so the server-side held item matches the placement packet.
+        val needsSlotSelection = !isUsableBlockStack(stack) || sortByHighestAmount || earlySwitch ||
+                (autoBlock != "Off" && !SilentHotbar.isSlotModified(this))
+
+        if (needsSlotSelection) {
+            val blockSlot = if (sortByHighestAmount) {
+                InventoryUtils.findLargestBlockStackInHotbar() ?: return
+            } else if (earlySwitch) {
+                InventoryUtils.findBlockStackInHotbarGreaterThan(amountBeforeSwitch)
+                    ?: InventoryUtils.findBlockInHotbar() ?: return
+            } else if (isUsableBlockStack(stack)) {
+                // Already holding a usable block: keep this slot, just (re)assert it.
+                currentSlot
             } else {
-                mc.thePlayer.inventory.currentItem = blockSlot - 36
-            }
-            itemStack = mc.thePlayer.inventoryContainer.getSlot(blockSlot).stack
-        }
-        if (isDynamicSprint) {
-            mc.netHandler.addToSendQueue(C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.STOP_SPRINTING))
-        }
-        if (mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, itemStack, targetPlace!!.blockPos, targetPlace!!.enumFacing, targetPlace!!.vec3)) {
-            // delayTimer.reset()
-            delay = TimeUtils.randomDelay(minDelayValue.get(), maxDelayValue.get())
-            if (mc.thePlayer.onGround) {
-                val modifier = speedModifierValue.get()
-                mc.thePlayer.motionX *= modifier.toDouble()
-                mc.thePlayer.motionZ *= modifier.toDouble()
+                InventoryUtils.findBlockInHotbar() ?: return
             }
 
-            if (swingValue.equals("packet")) {
-                mc.netHandler.addToSendQueue(C0APacketAnimation())
-            } else if (swingValue.equals("normal")) {
-                mc.thePlayer.swingItem()
+            val blockStack = player.hotBarSlot(blockSlot).stack ?: return
+
+            if (!isUsableBlockStack(blockStack)) {
+                return
             }
-            lastPlace = 2
-            lastPlaceBlock = targetPlace!!.blockPos.add(targetPlace!!.enumFacing.directionVec)
-            when (extraClickValue.get().lowercase()) {
-                "afterplace" -> {
-                    // fake click
-                    val blockPos = targetPlace!!.blockPos
-                    val hitVec = targetPlace!!.vec3
-                    afterPlaceC08 = C08PacketPlayerBlockPlacement(targetPlace!!.blockPos, targetPlace!!.enumFacing.index, itemStack, (hitVec.xCoord - blockPos.x.toDouble()).toFloat(), (hitVec.yCoord - blockPos.y.toDouble()).toFloat(), (hitVec.zCoord - blockPos.z.toDouble()).toFloat())
-                }
+
+            // Check if block is placeable on target side before switching slots
+            if ((blockStack.item as? ItemBlock)?.canPlaceBlockOnSide(
+                    world, placeInfo.blockPos, placeInfo.enumFacing, player, blockStack
+                ) == false
+            ) {
+                return
             }
-        }
-        if (isDynamicSprint) {
-            mc.netHandler.addToSendQueue(C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.START_SPRINTING))
+
+            stack = blockStack
+
+            if (autoBlock != "Off") {
+                SilentHotbar.selectSlotSilently(
+                    this,
+                    blockSlot,
+                    render = autoBlock in arrayOf("Pick", "FakeSpoof"),
+                    renderFirstPerson = autoBlock == "Pick",
+                    resetManually = true
+                )
+            }
         }
 
-        if (autoBlockValue.equals("LiteSpoof") && blockSlot >= 0) {
-            mc.netHandler.addToSendQueue(C09PacketHeldItemChange(mc.thePlayer.inventory.currentItem))
+        // Never place with an empty/non-block hand: this is the case the issue describes where Spoof
+        // silently fails to switch and the placement happens with the wrong item -> anticheat flag.
+        val placeStack = stack ?: return
+
+        if (!isUsableBlockStack(placeStack)) {
+            return
         }
 
-        // Reset
-        targetPlace = null
+        tryToPlaceBlock(placeStack, placeInfo.blockPos, placeInfo.enumFacing, placeInfo.vec3)
+
+        if (autoBlock == "Switch") SilentHotbar.resetSlot(this, true)
+
+        // Since we violate vanilla slot switch logic if we send the packets now, we arrange them for the next tick
+        findBlockToSwitchNextTick(placeStack)
+
+        if (trackCPS) {
+            CPSCounter.registerClick(CPSCounter.MouseButton.RIGHT)
+        }
     }
 
-    /**
-     * Disable scaffold module
-     */
+    private fun doPlaceAttempt(raytrace: MovingObjectPosition?, lastClick: Boolean, onSuccess: () -> Unit = { }) {
+        val player = mc.thePlayer ?: return
+        val world = mc.theWorld ?: return
+
+        val stack = player.hotBarSlot(SilentHotbar.currentSlot).stack ?: return
+
+        if (stack.item !is ItemBlock || InventoryUtils.BLOCK_BLACKLIST.contains((stack.item as ItemBlock).block)) {
+            return
+        }
+
+        raytrace ?: return
+
+        val block = stack.item as ItemBlock
+
+        val canPlaceOnUpperFace = block.canPlaceBlockOnSide(
+            world, raytrace.blockPos, EnumFacing.UP, player, stack
+        )
+
+        val shouldPlace = if (placementAttempt == "Fail") {
+            !block.canPlaceBlockOnSide(world, raytrace.blockPos, raytrace.sideHit, player, stack)
+        } else {
+            if (shouldKeepLaunchPosition) {
+                raytrace.blockPos.y == launchY - 1 && !canPlaceOnUpperFace
+            } else if (shouldPlaceHorizontally) {
+                !canPlaceOnUpperFace
+            } else {
+                raytrace.blockPos.y <= player.posY.toInt() - 1 && !(raytrace.blockPos.y == player.posY.toInt() - 1 && canPlaceOnUpperFace && raytrace.sideHit == EnumFacing.UP)
+            }
+        }
+
+        if (!raytrace.typeOfHit.isBlock || !shouldPlace) {
+            return
+        }
+
+        tryToPlaceBlock(stack, raytrace.blockPos, raytrace.sideHit, raytrace.hitVec, attempt = true) { onSuccess() }
+
+        // Since we violate vanilla slot switch logic if we send the packets now, we arrange them for the next tick
+        if (lastClick) {
+            findBlockToSwitchNextTick(stack)
+        }
+
+        if (trackCPS) {
+            CPSCounter.registerClick(CPSCounter.MouseButton.RIGHT)
+        }
+    }
+
+    // Disabling module
     override fun onDisable() {
-        // tolleyStayTick=999
-        if (mc.thePlayer == null) return
+        RotationUtils.cancelTargetRotation(options, immediate = true)
+        TickScheduler.cancel(eagleSneakTask)
+        TickScheduler.cancel(eagleGroundBlockTask)
+
+        val player = mc.thePlayer
+
         if (!GameSettings.isKeyDown(mc.gameSettings.keyBindSneak)) {
             mc.gameSettings.keyBindSneak.pressed = false
-            if (eagleSneaking) mc.netHandler.addToSendQueue(C0BPacketEntityAction(mc.thePlayer, C0BPacketEntityAction.Action.STOP_SNEAKING))
+            if (eagleSneaking && player?.isSneaking == true) {
+                //sendPacket(C0BPacketEntityAction(player, C0BPacketEntityAction.Action.STOP_SNEAKING))
+
+                /**
+                 * Should prevent false flag by some AntiCheat (Ex: Verus)
+                 */
+                player.isSneaking = false
+            }
         }
-        if (!GameSettings.isKeyDown(mc.gameSettings.keyBindRight)) mc.gameSettings.keyBindRight.pressed = false
-        if (!GameSettings.isKeyDown(mc.gameSettings.keyBindLeft)) mc.gameSettings.keyBindLeft.pressed = false
-        lockRotation = null
+
+        if (!GameSettings.isKeyDown(mc.gameSettings.keyBindRight)) {
+            mc.gameSettings.keyBindRight.pressed = false
+        }
+        if (!GameSettings.isKeyDown(mc.gameSettings.keyBindLeft)) {
+            mc.gameSettings.keyBindLeft.pressed = false
+        }
+
+        if (autoF5) {
+            mc.gameSettings.thirdPersonView = 0
+        }
+
+        placeRotation = null
+        godBridgeTargetRotation = null
+        blocksPlacedUntilJump = 0
         mc.timer.timerSpeed = 1f
-        shouldGoDown = false
-        RotationUtils.reset()
-        if (slot != mc.thePlayer.inventory.currentItem) mc.netHandler.addToSendQueue(C09PacketHeldItemChange(mc.thePlayer.inventory.currentItem))
+
+        SilentHotbar.resetSlot(this)
+
+        options.instant = false
     }
 
-    /**
-     * Entity movement event
-     *
-     * @param event
-     */
-    @EventTarget
-    fun onMove(event: MoveEvent) {
-        if (safeWalkValue.equals("off") || shouldGoDown) return
-        if (safeWalkValue.equals("air") || mc.thePlayer.onGround) event.isSafeWalk = true
-    }
+    // Entity movement event
+    val onMove = handler<MoveEvent> { event ->
+        val player = mc.thePlayer ?: return@handler
 
-    /**
-     * BlockFly visuals
-     *
-     * @param event
-     */
-    @JvmName("getBlocksAmount2")
-    private fun getBlocksAmount2(): Int {
-        var amount = 0
-        for (i in 36..44) {
-            val itemStack = mc.thePlayer.inventoryContainer.getSlot(i).stack
-            if (itemStack != null && itemStack.item is ItemBlock) {
-                val block = (itemStack.item as ItemBlock).getBlock()
-                if (!InventoryUtils.BLOCK_BLACKLIST.contains(block) && block.isFullCube) amount += itemStack.stackSize
-            }
+        if (!safeWalkValue.isActive() || shouldGoDown) {
+            return@handler
         }
-        return amount
+
+        if (airSafe || player.onGround) {
+            event.isSafeWalk = true
+        }
     }
 
-    private val barrier = ItemStack(Item.getItemById(166), 0, 0)
-    @EventTarget
-    fun onRender2D(event: Render2DEvent) {
-        progress = (System.currentTimeMillis() - lastMS).toFloat() / 100f
-        if (progress >= 1) progress = 1f
-        val scaledResolution = ScaledResolution(mc)
-        val info = getBlocksAmount2().toString() + " blocks"
-        val info2 = getBlocksAmount2().toString()
-        val info3 = getBlocksAmount2().toString() + "Blocks Left"
-        val infoWidth = Fonts.gs40.getStringWidth(info)
-        val info3Width = Fonts.gs40.getStringWidth(info3)
-        val height = event.scaledResolution.scaledHeight
-        val width = event.scaledResolution.scaledWidth
-        val slot = InventoryUtils.findAutoBlockBlock()
-        var stack = barrier
-        val w2=(mc.fontRendererObj.getStringWidth(info))
-        if (counterDisplayValue.get()) {
-            if (slot != -1) {
-                if (mc.thePlayer.inventory.getCurrentItem() != null) {
-                    val handItem = mc.thePlayer.inventory.getCurrentItem().item
-                    if (handItem is ItemBlock && InventoryUtils.canPlaceBlock(handItem.block)) {
-                        stack = mc.thePlayer.inventory.getCurrentItem()
-                    }
-                }
-                if (stack == barrier) {
-                    stack = mc.thePlayer.inventory.getStackInSlot(InventoryUtils.findAutoBlockBlock() - 36)
-                    if (stack == null) {
-                        stack = barrier
-                    }
-                }
+    val jumpHandler = handler<JumpEvent> { event ->
+        if (!jumpStrafe) return@handler
+
+        if (event.eventState == EventState.POST) {
+            MovementUtils.strafe(
+                (if (!isLookingDiagonally) jumpStraightStrafe else jumpDiagonalStrafe).random()
+            )
+        }
+    }
+
+    // Visuals
+    private var counterStart = 0L
+
+    val onRender2D = handler<Render2DEvent> {
+        if (!counter) return@handler
+
+        if (counterStart == 0L) counterStart = System.currentTimeMillis()
+
+        val progress = ((System.currentTimeMillis() - counterStart) / 100f).coerceIn(0f, 1f)
+
+        val scaledResolution = it.scaledResolution
+        val amount = blocksAmount()
+        val text = "$amount blocks"
+
+        val hotbarSlot = InventoryUtils.findBlockInHotbar() ?: -1
+        val stack = if (hotbarSlot in 0..8) mc.thePlayer?.inventory?.mainInventory?.getOrNull(hotbarSlot) else null
+        val blockStack = stack?.takeIf { it.item is ItemBlock }
+
+        when (counterMode) {
+            "Simple" -> {
+                val font = Fonts.minecraftFont
+                val label = amount.toString()
+
+                font.drawStringWithShadow(
+                    label,
+                    scaledResolution.scaledWidth / 2f - font.getStringWidth(label) / 2f,
+                    scaledResolution.scaledHeight / 2f - 36f,
+                    -1
+                )
             }
-            when (counterModeValue.get().lowercase()) {
-                "fdp" -> {
-                    RenderUtils.drawRoundedCornerRect(
-                        (width - w2 - 20) / 2f,
-                        height * 0.8f - 24f,
-                        (width + w2 + 18) / 2f,
-                        height * 0.8f + 12f,
-                        3f,
-                        Color(43, 45, 48).rgb
-                    )
-                    Fonts.font40.drawCenteredString("▼",width / 2.0f + 2f, height * 0.8f+8f,Color(43,45,48).rgb)
+
+            "Rounded" -> {
+                val width = Fonts.font35.getStringWidth(text)
+                val left = scaledResolution.scaledWidth / 2f - width / 2f - 10f
+                val right = scaledResolution.scaledWidth / 2f + width / 2f + 10f
+                val top = scaledResolution.scaledHeight - 77f
+                val bottom = scaledResolution.scaledHeight - 57f
+
+                RenderUtils.drawRoundedCornerRect(left, top, right, bottom, 2.5f, Color(64, 64, 64, 200).rgb)
+                Fonts.font35.drawCenteredString(
+                    text, scaledResolution.scaledWidth / 2f + 0.1f, top + 6f, Color(255, 255, 255, 220).rgb, false
+                )
+            }
+
+            "Drama" -> {
+                val x = scaledResolution.scaledWidth / 2f
+                val y = scaledResolution.scaledHeight * 0.8f
+
+                RenderUtils.drawCircle(x, y, 18f, Color(40, 40, 40, 170).rgb)
+                Renderer.drawCircleBorder(x, y, 18f, Color(255, 40, 255, 255).rgb, 4f)
+                Fonts.font40.drawCenteredString(
+                    amount.toString(), x + 1.5f, y + 5f, Color(255, 255, 255, 180).rgb, false
+                )
+            }
+
+            "FDP" -> {
+                val infoWidth = Fonts.gs40.getStringWidth(text)
+                val width = scaledResolution.scaledWidth
+                val height = scaledResolution.scaledHeight
+
+                RenderUtils.drawRoundedCornerRect(
+                    (width - infoWidth - 20) / 2f,
+                    height * 0.8f - 24f,
+                    (width + infoWidth + 18) / 2f,
+                    height * 0.8f + 12f,
+                    3f,
+                    Color(43, 45, 48).rgb
+                )
+                Fonts.font40.drawCenteredString("▼", width / 2f + 2f, height * 0.8f + 8f, Color(43, 45, 48).rgb)
+
+                if (blockStack != null) {
                     RenderHelper.enableGUIStandardItemLighting()
-                    mc.renderItem.renderItemIntoGUI(stack, width / 2 - 10, (height * 0.8 - 20).toInt())
+                    mc.renderItem.renderItemIntoGUI(blockStack, width / 2 - 10, (height * 0.8f - 20).toInt())
                     RenderHelper.disableStandardItemLighting()
-                    Fonts.font40.drawCenteredString(info, width / 2f, height * 0.8f, Color.WHITE.rgb, false)
+                }
+
+                Fonts.gs40.drawCenteredString(text, width / 2f, height * 0.8f, Color.WHITE.rgb, false)
+            }
+
+            "Sigma" -> {
+                val infoWidth = Fonts.gs35.getStringWidth(text)
+                val centerX = scaledResolution.scaledWidth / 2
+                val bottomY = scaledResolution.scaledHeight - 60
+
+                GL11.glEnable(GL11.GL_BLEND)
+                GL11.glDisable(GL11.GL_TEXTURE_2D)
+                GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA)
+                GL11.glEnable(GL11.GL_LINE_SMOOTH)
+                GL11.glColor4f(0.15f, 0.15f, 0.15f, progress)
+                GL11.glBegin(GL11.GL_TRIANGLE_FAN)
+                GL11.glVertex2d((centerX - 3).toDouble(), bottomY.toDouble())
+                GL11.glVertex2d(centerX.toDouble(), (bottomY + 3).toDouble())
+                GL11.glVertex2d((centerX + 3).toDouble(), bottomY.toDouble())
+                GL11.glEnd()
+                GL11.glEnable(GL11.GL_TEXTURE_2D)
+                GL11.glDisable(GL11.GL_BLEND)
+                GL11.glDisable(GL11.GL_LINE_SMOOTH)
+
+                RenderUtils.drawRoundedCornerRect(
+                    centerX - infoWidth / 2f - 4f,
+                    bottomY.toFloat(),
+                    centerX + infoWidth / 2f + 4f,
+                    (bottomY - 14).toFloat(),
+                    2f,
+                    Color(0.15f, 0.15f, 0.15f, progress).rgb
+                )
+                GlStateManager.resetColor()
+                Fonts.gs35.drawCenteredString(
+                    text, centerX + 0.1f, (bottomY - 10).toFloat(), Color(1f, 1f, 1f, 0.8f * progress).rgb, false
+                )
+            }
+
+            "Novoline" -> {
+                if (blockStack != null) {
+                    GlStateManager.pushMatrix()
+                    GlStateManager.translate(
+                        scaledResolution.scaledWidth / 2f - 22f,
+                        scaledResolution.scaledHeight / 2f + 16f,
+                        scaledResolution.scaledWidth / 2f - 22f
+                    )
+                    renderItemStack(blockStack, 0, 0)
                     GlStateManager.popMatrix()
                 }
-                "lbp" -> {
-                    GlStateManager.translate(0f, -14f - progress * 4f, 0f)
-                    //GL11.glPushMatrix();
-                    GL11.glEnable(GL11.GL_BLEND)
-                    GL11.glDisable(GL11.GL_TEXTURE_2D)
-                    GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA)
-                    GL11.glEnable(GL11.GL_LINE_SMOOTH)
-                    GL11.glColor4f(0.25f, 0.25f, 0.25f, progress)
-                    GL11.glBegin(GL11.GL_TRIANGLE_FAN)
-                    GL11.glVertex2d(
-                        (scaledResolution.scaledWidth / 2 - 3).toDouble(),
-                        (scaledResolution.scaledHeight - 60).toDouble()
-                    )
-                    GL11.glVertex2d(
-                        (scaledResolution.scaledWidth / 2).toDouble(),
-                        (scaledResolution.scaledHeight - 57).toDouble()
-                    )
-                    GL11.glVertex2d(
-                        (scaledResolution.scaledWidth / 2 + 3).toDouble(),
-                        (scaledResolution.scaledHeight - 60).toDouble()
-                    )
-                    GL11.glEnd()
-                    GL11.glEnable(GL11.GL_TEXTURE_2D)
-                    GL11.glDisable(GL11.GL_BLEND)
-                    GL11.glDisable(GL11.GL_LINE_SMOOTH)
-                    //GL11.glPopMatrix();
-                    RenderUtils.drawRoundedCornerRect(
-                        (scaledResolution.scaledWidth / 2 - infoWidth / 2 - 4).toFloat(),
-                        (scaledResolution.scaledHeight - 60).toFloat(),
-                        (scaledResolution.scaledWidth / 2 + infoWidth / 2 + 4).toFloat(),
-                        (scaledResolution.scaledHeight - 74).toFloat(),
-                        2.5f,
-                        Color(0.25f, 0.25f, 0.25f, progress).rgb
-                    )
-                    GlStateManager.resetColor()
-                    Fonts.font35.drawCenteredString(
-                        info, scaledResolution.scaledWidth / 2 + 0.1f,
-                        (scaledResolution.scaledHeight - 70).toFloat(), Color(1f, 1f, 1f, 0.8f * progress).rgb, false
-                    )
-                    GlStateManager.translate(0f, 14f + progress * 4f, 0f)
-                }
-                "drama" -> {
-                    RenderUtils.drawCircle(width /2f,height * 0.80f,18f,Color(40,40,40,170).rgb)
-                    Renderer.drawCircleBorder(width /2f,height *0.80f,18f,Color(redValue.get(),greenValue.get(),blueValue.get(),alpha.get()).rgb, 4f)
-                    Renderer.drawCircleBorder(width /2f,height *0.80f,21f,Color(redValue.get(),greenValue.get(),blueValue.get(),alpha.get()/2).rgb, 12f)
-                    Renderer.enableGUIStandardItemLighting()
-                    renderItemStack(stack, 0, 0)
-                    Renderer.disableStandardItemLighting()
-                    Fonts.font40.drawCenteredString(info2, width / 2.0f+3/2, height * 0.80f+5, Color(255,255,255,180).rgb, false)
-                }
-                "Rounded" -> {
-                    RenderUtils.drawRoundedCornerRect(
-                        (scaledResolution.scaledWidth / 2 - info3Width / 2 - 10).toFloat(),
-                        (scaledResolution.scaledHeight - 57).toFloat(),
-                        (scaledResolution.scaledWidth / 2 + info3Width / 2 + 10).toFloat(),
-                        (scaledResolution.scaledHeight - 77).toFloat(),
-                        2.5f,
-                        Color(0.25f, 0.25f, 0.25f, progress).rgb)
-                    renderItemStack(stack, (scaledResolution.scaledWidth / 2 + 0.1f).toInt(), scaledResolution.scaledHeight - 64)
-                    Fonts.font35.drawCenteredString(
-                        info3, scaledResolution.scaledWidth / 2 + 0.1f,
-                        (scaledResolution.scaledHeight - 70).toFloat(), Color(1f, 1f, 1f, 0.8f * progress).rgb, false
-                    )
-                }
-                "simple" -> {
-                    Fonts.minecraftFont.drawString(getBlocksAmount2().toString() + "", (scaledResolution.scaledWidth / 2 - infoWidth / 2 - 1).toFloat(), (scaledResolution.scaledHeight / 2 - 36).toFloat(), -0x1000000, false)
-                    Fonts.minecraftFont.drawString(getBlocksAmount2().toString() + "", (scaledResolution.scaledWidth / 2 - infoWidth / 2 + 1).toFloat(), (scaledResolution.scaledHeight / 2 - 36).toFloat(), -0x1000000, false)
-                    Fonts.minecraftFont.drawString(getBlocksAmount2().toString() + "", (scaledResolution.scaledWidth / 2 - infoWidth / 2).toFloat(), (scaledResolution.scaledHeight / 2 - 35).toFloat(), -0x1000000, false)
-                    Fonts.minecraftFont.drawString(getBlocksAmount2().toString() + "", (scaledResolution.scaledWidth / 2 - infoWidth / 2).toFloat(), (scaledResolution.scaledHeight / 2 - 37).toFloat(), -0x1000000, false)
-                    Fonts.minecraftFont.drawString(getBlocksAmount2().toString() + "", (scaledResolution.scaledWidth / 2 - infoWidth / 2).toFloat(), (scaledResolution.scaledHeight / 2 - 36).toFloat(), -1, false)
-                }
-                "advanced" -> {
-                    val canRenderStack =
-                        slot >= 0 && slot < 9 && mc.thePlayer.inventory.mainInventory[slot] != null && mc.thePlayer.inventory.mainInventory[slot].item != null && mc.thePlayer.inventory.mainInventory[slot].item is ItemBlock
-                    if (blurValue.get()) BlurUtilsOld.blurArea(
-                        scaledResolution.scaledWidth / 2 - infoWidth / 2 - 4f,
-                        scaledResolution.scaledHeight / 2 - 39f,
-                        scaledResolution.scaledWidth / 2 + infoWidth / 2 + 4f,
-                        scaledResolution.scaledHeight / 2 - if (canRenderStack) 5f else 26f,
-                        blurStrength.get()
-                    )
+                GlStateManager.resetColor()
 
-                    RenderUtils.drawRect(
-                        (scaledResolution.scaledWidth / 2 - infoWidth / 2 - 4).toFloat(),
-                        (scaledResolution.scaledHeight / 2 - 40).toFloat(),
-                        (scaledResolution.scaledWidth / 2 + infoWidth / 2 + 4).toFloat(),
-                        (scaledResolution.scaledHeight / 2 - 39).toFloat(),
-                        if (getBlocksAmount2() > 1) -0x1 else -0xeff0
-                    )
-                    RenderUtils.drawRect(
-                        (scaledResolution.scaledWidth / 2 - infoWidth / 2 - 4).toFloat(),
-                        (scaledResolution.scaledHeight / 2 - 39).toFloat(),
-                        (scaledResolution.scaledWidth / 2 + infoWidth / 2 + 4).toFloat(),
-                        (scaledResolution.scaledHeight / 2 - 26).toFloat(),
-                        -0x60000000
-                    )
+                Fonts.minecraftFont.drawString(
+                    text,
+                    scaledResolution.scaledWidth / 2f,
+                    scaledResolution.scaledHeight / 2f + 20f,
+                    -1,
+                    true
+                )
+            }
 
-                    if (canRenderStack) {
-                        RenderUtils.drawRect(
-                            (scaledResolution.scaledWidth / 2 - infoWidth / 2 - 4).toFloat(),
-                            (scaledResolution.scaledHeight / 2 - 26).toFloat(),
-                            (scaledResolution.scaledWidth / 2 + infoWidth / 2 + 4).toFloat(),
-                            (scaledResolution.scaledHeight / 2 - 5).toFloat(),
-                            -0x60000000
-                        )
-                        GlStateManager.pushMatrix()
-                        GlStateManager.translate(
-                            (scaledResolution.scaledWidth / 2 - 8).toFloat(),
-                            (scaledResolution.scaledHeight / 2 - 25).toFloat(),
-                            (scaledResolution.scaledWidth / 2 - 8).toFloat()
-                        )
-                        renderItemStack(mc.thePlayer.inventory.mainInventory[slot], 0, 0)
-                        GlStateManager.popMatrix()
-                    }
-                    GlStateManager.resetColor()
+            "Advanced" -> {
+                val infoWidth = Fonts.gs40.getStringWidth(text)
+                val centerX = scaledResolution.scaledWidth / 2f
+                val halfHeight = scaledResolution.scaledHeight / 2f
 
-                    Fonts.gs40.drawCenteredString(
-                        info,
-                        (scaledResolution.scaledWidth / 2).toFloat(),
-                        scaledResolution.scaledHeight / 2 - 36f,
-                        -1)
-                }
-                "sigma" -> {
-                    GlStateManager.translate(0f, -14f - progress * 4f, 0f)
-                    //GL11.glPushMatrix();
-                    //GL11.glPushMatrix();
-                    GL11.glEnable(GL11.GL_BLEND)
-                    GL11.glDisable(GL11.GL_TEXTURE_2D)
-                    GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA)
-                    GL11.glEnable(GL11.GL_LINE_SMOOTH)
-                    GL11.glColor4f(0.15f, 0.15f, 0.15f, progress)
-                    GL11.glBegin(GL11.GL_TRIANGLE_FAN)
-                    GL11.glVertex2d(
-                        (scaledResolution.scaledWidth / 2 - 3).toDouble(),
-                        (scaledResolution.scaledHeight - 60).toDouble()
-                    )
-                    GL11.glVertex2d(
-                        (scaledResolution.scaledWidth / 2).toDouble(),
-                        (scaledResolution.scaledHeight - 57).toDouble()
-                    )
-                    GL11.glVertex2d(
-                        (scaledResolution.scaledWidth / 2 + 3).toDouble(),
-                        (scaledResolution.scaledHeight - 60).toDouble()
-                    )
-                    GL11.glEnd()
-                    GL11.glEnable(GL11.GL_TEXTURE_2D)
-                    GL11.glDisable(GL11.GL_BLEND)
-                    GL11.glDisable(GL11.GL_LINE_SMOOTH)
-                    //GL11.glPopMatrix();
-                    //GL11.glPopMatrix();
-                    RenderUtils.drawRoundedCornerRect(
-                        scaledResolution.scaledWidth / 2 - infoWidth / 2 - 4f,
-                        scaledResolution.scaledHeight - 60f,
-                        scaledResolution.scaledWidth / 2 + infoWidth / 2 + 4f,
-                        scaledResolution.scaledHeight - 74f,
-                        2f,
-                        Color(0.15f, 0.15f, 0.15f, progress).rgb
-                    )
-                    GlStateManager.resetColor()
-                    Fonts.gs35.drawCenteredString(
-                        info,
-                        scaledResolution.scaledWidth / 2 + 0.1f,
-                        scaledResolution.scaledHeight - 70f,
-                        Color(1f, 1f, 1f, 0.8f * progress).rgb,
-                        false
-                    )
-                    GlStateManager.translate(0f, 14f + progress * 4f, 0f)
-                }
-                "novoline" -> {
-                    if (slot in 0..8 && mc.thePlayer.inventory.mainInventory[slot] != null && mc.thePlayer.inventory.mainInventory[slot].item != null && mc.thePlayer.inventory.mainInventory[slot].item is ItemBlock) {
-                        //RenderUtils.drawRect(scaledResolution.getScaledWidth() / 2 - (infoWidth / 2) - 4, scaledResolution.getScaledHeight() / 2 - 26, scaledResolution.getScaledWidth() / 2 + (infoWidth / 2) + 4, scaledResolution.getScaledHeight() / 2 - 5, 0xA0000000);
-                        GlStateManager.pushMatrix()
-                        GlStateManager.translate(
-                            (scaledResolution.scaledWidth / 2 - 22).toFloat(),
-                            (scaledResolution.scaledHeight / 2 + 16).toFloat(),
-                            (scaledResolution.scaledWidth / 2 - 22).toFloat()
-                        )
-                        renderItemStack(mc.thePlayer.inventory.mainInventory[slot], 0, 0)
-                        GlStateManager.popMatrix()
-                    }
-                    GlStateManager.resetColor()
+                val left = centerX - infoWidth / 2f - 4f
+                val right = centerX + infoWidth / 2f + 4f
 
-                    Fonts.minecraftFont.drawString(
-                        getBlocksAmount2().toString() + " blocks",
-                        (scaledResolution.scaledWidth / 2).toFloat(),
-                        (scaledResolution.scaledHeight / 2 + 20).toFloat(),
-                        -1,
-                        true
+                if (counterBlur) {
+                    BlurUtilsOld.blurArea(
+                        left, halfHeight - 39f, right,
+                        halfHeight - if (blockStack != null) 5f else 26f,
+                        counterBlurStrength
                     )
                 }
+
+                RenderUtils.drawRect(left, halfHeight - 40f, right, halfHeight - 39f, if (amount > 1) -0x1 else -0xeff0)
+                RenderUtils.drawRect(left, halfHeight - 39f, right, halfHeight - 26f, -0x60000000)
+
+                if (blockStack != null) {
+                    RenderUtils.drawRect(left, halfHeight - 26f, right, halfHeight - 5f, -0x60000000)
+
+                    GlStateManager.pushMatrix()
+                    GlStateManager.translate(centerX - 8f, halfHeight - 25f, centerX - 8f)
+                    renderItemStack(blockStack, 0, 0)
+                    GlStateManager.popMatrix()
+                }
+                GlStateManager.resetColor()
+
+                Fonts.gs40.drawCenteredString(text, centerX, halfHeight - 36f, -1)
+            }
+
+            else -> {
+                val width = Fonts.font35.getStringWidth(text)
+                val left = scaledResolution.scaledWidth / 2f - width / 2f - 4f
+                val right = scaledResolution.scaledWidth / 2f + width / 2f + 4f
+                val top = scaledResolution.scaledHeight - 74f
+                val bottom = scaledResolution.scaledHeight - 60f
+
+                RenderUtils.drawRoundedCornerRect(left, top, right, bottom, 2.5f, Color(64, 64, 64, 200).rgb)
+                Fonts.font35.drawCenteredString(
+                    text, scaledResolution.scaledWidth / 2f + 0.1f, top + 4f, Color(255, 255, 255, 220).rgb, false
+                )
             }
         }
     }
@@ -1188,22 +1561,46 @@ class BlockFly : Module() {
         GlStateManager.popMatrix()
     }
 
-    /**
-     * BlockFly visuals
-     *
-     * @param event
-     */
-    @EventTarget
-    fun onRender3D(event: Render3DEvent) {
-        if (markValue.get()) {
-            for (i in 0 until (expandLengthValue.get() + 1)) {
-                val blockPos = BlockPos(mc.thePlayer.posX + if (mc.thePlayer.horizontalFacing == EnumFacing.WEST) -i else if (mc.thePlayer.horizontalFacing == EnumFacing.EAST) i else 0, mc.thePlayer.posY - (if (mc.thePlayer.posY == mc.thePlayer.posY.toInt() + 0.5) { 0.0 } else { 1.0 }) - (if (shouldGoDown) { 1.0 } else { 0.0 }), mc.thePlayer.posZ + if (mc.thePlayer.horizontalFacing == EnumFacing.NORTH) -i else if (mc.thePlayer.horizontalFacing == EnumFacing.SOUTH) i else 0)
-                val placeInfo = get(blockPos)
-                if (BlockUtils.isReplaceable(blockPos) && placeInfo != null) {
-                    val rainbow = markRainbowValue.get()
-                    RenderUtils.drawBlockBox(blockPos, if (rainbow) net.ccbluex.liquidbounce.utils.render.ColorUtils.rainbow() else Color.BLUE, true, true, 0.8f)
-                    break
+    val onRender3D = handler<Render3DEvent> {
+        val player = mc.thePlayer ?: return@handler
+
+        val shouldBother =
+            !(shouldGoDown || scaffoldMode == "Expand" && expandLength > 1) && extraClicks && (player.isMoving || MovementUtils.speed > 0.03)
+
+        if (shouldBother) {
+            currRotation.let {
+                performBlockRaytrace(it, mc.playerController.blockReachDistance)?.let { raytrace ->
+                    val timePassed = System.currentTimeMillis() - extraClick.lastClick >= extraClick.delay
+
+                    if (raytrace.typeOfHit.isBlock && timePassed) {
+                        extraClick = ExtraClickInfo(
+                            TimeUtils.randomClickDelay(extraClickCPS.first, extraClickCPS.last),
+                            System.currentTimeMillis(),
+                            extraClick.clicks + 1
+                        )
+                    }
                 }
+            }
+        }
+
+        if (!mark) {
+            return@handler
+        }
+
+        repeat(if (scaffoldMode == "Expand") expandLength + 1 else 2) {
+            val yaw = player.rotationYaw.toRadiansD()
+            val x = if (omniDirectionalExpand) -sin(yaw).roundToInt() else player.horizontalFacing.directionVec.x
+            val z = if (omniDirectionalExpand) cos(yaw).roundToInt() else player.horizontalFacing.directionVec.z
+            val blockPos = BlockPos(
+                player.posX + x * it,
+                if (shouldKeepLaunchPosition && launchY <= player.posY) launchY - 1.0 else player.posY - (if (isHalfBlockLevel(player.posY)) 0.0 else 1.0) - if (shouldGoDown) 1.0 else 0.0,
+                player.posZ + z * it
+            )
+            val placeInfo = PlaceInfo.get(blockPos)
+
+            if (blockPos.isReplaceable && placeInfo != null) {
+                RenderUtils.drawBlockBox(blockPos, if (markRainbow) ColorUtils.rainbow() else Color(68, 117, 255, 100), true, true, 2f)
+                return@handler
             }
         }
     }
@@ -1212,285 +1609,506 @@ class BlockFly : Module() {
      * Search for placeable block
      *
      * @param blockPosition pos
-     * @param checks        visible
+     * @param raycast visible
+     * @param area spot
      * @return
      */
-    private fun search(blockPosition: BlockPos, checks: Boolean): Boolean {
-        if (!BlockUtils.isReplaceable(blockPosition)) return false
-        val eyesPos = Vec3(
-            mc.thePlayer.posX,
-            mc.thePlayer.entityBoundingBox.minY + mc.thePlayer.getEyeHeight(),
-            mc.thePlayer.posZ
-        )
-        var placeRotation: PlaceRotation? = null
-        for (side in StaticStorage.facings()) {
-            val neighbor = blockPosition.offset(side)
-            if (!BlockUtils.canBeClicked(neighbor)) continue
-            val dirVec = Vec3(side.directionVec)
-            var xSearch = 0.1
-            while (xSearch < 0.9) {
-                var ySearch = 0.1
-                while (ySearch < 0.9) {
-                    var zSearch = 0.1
-                    while (zSearch < 0.9) {
-                        val posVec = Vec3(blockPosition).addVector(xSearch, ySearch, zSearch)
-                        val distanceSqPosVec = eyesPos.squareDistanceTo(posVec)
-                        val hitVec = posVec.add(Vec3(dirVec.xCoord * 0.5, dirVec.yCoord * 0.5, dirVec.zCoord * 0.5))
-                        if (checks && (eyesPos.squareDistanceTo(hitVec) > 18.0 || distanceSqPosVec > eyesPos.squareDistanceTo(
-                                posVec.add(dirVec)
-                            ) || mc.theWorld.rayTraceBlocks(eyesPos, hitVec, false, true, false) != null)
-                        ) {
-                            zSearch += 0.1
-                            continue
-                        }
 
-                        // face block
-                        val diffX = hitVec.xCoord - eyesPos.xCoord
-                        val diffY = hitVec.yCoord - eyesPos.yCoord
-                        val diffZ = hitVec.zCoord - eyesPos.zCoord
-                        val diffXZ = MathHelper.sqrt_double(diffX * diffX + diffZ * diffZ).toDouble()
-                        val rotation = Rotation(
-                            MathHelper.wrapAngleTo180_float(Math.toDegrees(atan2(diffZ, diffX)).toFloat() - 90f),
-                            MathHelper.wrapAngleTo180_float((-Math.toDegrees(atan2(diffY, diffXZ))).toFloat())
-                        )
-                        val rotationVector = RotationUtils.getVectorForRotation(rotation)
-                        val vector = eyesPos.addVector(
-                            rotationVector.xCoord * 4,
-                            rotationVector.yCoord * 4,
-                            rotationVector.zCoord * 4
-                        )
-                        val obj = mc.theWorld.rayTraceBlocks(eyesPos, vector, false, false, true)
-                        if (!(obj.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK && obj.blockPos == neighbor)) {
-                            zSearch += 0.1
-                            continue
+    fun search(
+        blockPosition: BlockPos,
+        raycast: Boolean,
+        area: Boolean,
+        horizontalOnly: Boolean = false,
+    ): Boolean {
+        val player = mc.thePlayer ?: return false
+
+        options.instant = false
+
+        if (!blockPosition.isReplaceable) {
+            if (autoF5) mc.gameSettings.thirdPersonView = 0
+            return false
+        } else {
+            if (autoF5 && mc.gameSettings.thirdPersonView != 1) mc.gameSettings.thirdPersonView = 1
+        }
+
+        val maxReach = mc.playerController.blockReachDistance
+
+        val eyes = player.eyes
+        var placeRotation: PlaceRotation? = null
+
+        var currPlaceRotation: PlaceRotation?
+
+        for (side in EnumFacing.values()) {
+            if (horizontalOnly && side.axis == EnumFacing.Axis.Y) {
+                continue
+            }
+
+            val neighbor = blockPosition.offset(side)
+
+            if (!neighbor.canBeClicked()) {
+                continue
+            }
+
+            if (!area || isGodBridgeBehaviorEnabled) {
+                currPlaceRotation =
+                    findTargetPlace(blockPosition, neighbor, Vec3(0.5, 0.5, 0.5), side, eyes, maxReach, raycast)
+                        ?: continue
+
+                placeRotation = compareDifferences(currPlaceRotation, placeRotation)
+            } else {
+                for (x in 0.1..0.9) {
+                    for (y in 0.1..0.9) {
+                        for (z in 0.1..0.9) {
+                            currPlaceRotation =
+                                findTargetPlace(blockPosition, neighbor, Vec3(x, y, z), side, eyes, maxReach, raycast)
+                                    ?: continue
+
+                            placeRotation = compareDifferences(currPlaceRotation, placeRotation)
                         }
-                        if (placeRotation == null || RotationUtils.getRotationDifference(rotation) < RotationUtils.getRotationDifference(
-                                placeRotation.rotation
-                            )
-                        ) placeRotation = PlaceRotation(PlaceInfo(neighbor, side.opposite, hitVec), rotation)
-                        zSearch += 0.1
                     }
-                    ySearch += 0.1
                 }
-                xSearch += 0.1
             }
         }
-        if (placeRotation == null) return false
-        if (!towerrotationsValue.equals("None") && towerStatus) {
-            lockRotation = when (towerrotationsValue.get().lowercase()) {
-                "aac" -> {
-                    Rotation(mc.thePlayer.rotationYaw + (if (mc.thePlayer.movementInput.moveForward < 0) 0 else 180) + aacYawValue.get(), placeRotation.rotation.pitch)
-                }
-                "vanilla" -> {
-                    placeRotation.rotation
-                }
-                "test1" -> {
-                    val caluyaw = ((placeRotation.rotation.yaw / 45).roundToInt() * 45).toFloat()
-                    Rotation(caluyaw, placeRotation.rotation.pitch)
-                }
-                "ncp" -> {
-                    val arrayOfFloat: FloatArray = getRotations(
-                        placeRotation.placeInfo.blockPos,
-                        placeRotation.placeInfo.enumFacing
-                    )
-                    val yaw = arrayOfFloat[0]
-                    val pitch = arrayOfFloat[1]
-                    Rotation(yaw, pitch)
-                }
-                "aac4" -> {
-                    var diffYaw = 0
-                    if (mc.thePlayer.movementInput.moveForward > 0) diffYaw = 180
-                    if (mc.thePlayer.movementInput.moveForward < 0) diffYaw = 0
-                    RotationUtils.setTargetRotation(
-                        Rotation(mc.thePlayer.rotationYaw + diffYaw, 90f),
-                        keepLengthValue.get()
-                    )
-                    Rotation(mc.thePlayer.rotationYaw + diffYaw, 90f)
-                }
-                "test2" -> {
-                    Rotation(((MovementUtils.direction * 180f / Math.PI).toFloat() + 135), placeRotation.rotation.pitch)
-                }
-                "backwards" -> {
-                    var calcyaw = ((MovementUtils.movingYaw - 180) / 45).roundToInt() * 45
-                    var calcpitch = 0f
-                    if (calcyaw % 90 == 0) {
-                        calcpitch = 82f
-                    } else {
-                        calcpitch = 78f
-                    }
-                    Rotation(calcyaw.toFloat(), calcpitch)
-                }
-                "custom" -> {
-                    Rotation(mc.thePlayer.rotationYaw + customYawValue.get(), customPitchValue.get().toFloat())
-                }
-                "advanced" -> {
-                    var advancedYaw = 0f
-                    var advancedPitch = 0f
-                    advancedYaw = when (advancedYawModeValue.get().lowercase()) {
-                        "offset" -> placeRotation.rotation.yaw + advancedYawOffsetValue.get()
-                        "static" -> mc.thePlayer.rotationYaw + advancedYawStaticValue.get()
-                        "vanilla" -> placeRotation.rotation.yaw
-                        "round" -> ((placeRotation.rotation.yaw / advancedYawRoundValue.get()).roundToInt() * advancedYawRoundValue.get()).toFloat()
-                        "roundstatic" -> (((mc.thePlayer.rotationYaw + advancedYawStaticValue.get()) / advancedYawRoundValue.get()).roundToInt() * advancedYawRoundValue.get()).toFloat()
-                        "movedirection" -> MovementUtils.movingYaw - 180
-                        "offsetmove" -> MovementUtils.movingYaw - 180 + advancedYawMoveOffsetValue.get()
-                        else -> placeRotation.rotation.yaw
-                    }
-                    advancedPitch = when (advancedPitchModeValue.get().lowercase()) {
-                        "offset" -> placeRotation.rotation.pitch + advancedPitchOffsetValue.get().toFloat()
-                        "static" -> advancedPitchStaticValue.get().toFloat()
-                        "vanilla" -> placeRotation.rotation.pitch
-                        else -> placeRotation.rotation.pitch
-                    }
-                    Rotation(advancedYaw, advancedPitch)
-                }
-                else -> return false // this should not happen
-            }
-            if (silentRotationValue.get()) {
-                val limitedRotation =
-                    RotationUtils.limitAngleChange(RotationUtils.serverRotation, lockRotation!!, rotationSpeed)
-                RotationUtils.setTargetRotation(limitedRotation, keepLengthValue.get())
-            } else {
-                mc.thePlayer.rotationYaw = lockRotation!!.yaw
-                mc.thePlayer.rotationPitch = lockRotation!!.pitch
-            }
+
+        placeRotation ?: return false
+
+        if (currentRotationsActive && !shouldUseGodBridgeRotations) {
+            val rotationDifference = rotationDifference(placeRotation.rotation, currRotation)
+            val rotationDifference2 = rotationDifference(placeRotation.rotation / 90F, currRotation / 90F)
+
+            val simPlayer = SimulatedPlayer.fromClientPlayer(player.movementInput)
+            simPlayer.tick()
+
+            // We don't want to use block safe all the time, so we check if it's not needed.
+            options.instant =
+                blockSafe && simPlayer.fallDistance > player.fallDistance + 0.05 && rotationDifference > rotationDifference2 / 2
+
+            setRotation(placeRotation.rotation, if (scaffoldMode == "Telly") 1 else options.resetTicks)
         }
-        if (!rotationsValue.equals("None") && !towerStatus) {
-            val changeYaw = if (!randomChangeValue.get()) 0 else RandomUtils.nextInt(0, changeMaxYawValue.get())
-            val changePitch = if (!randomChangeValue.get()) 0 else RandomUtils.nextInt(0, changeMaxPitchValue.get())
-            lockRotation = when (rotationsValue.get().lowercase()) {
-                "aac" -> {
-                    Rotation(mc.thePlayer.rotationYaw + (if (mc.thePlayer.movementInput.moveForward < 0) 0 else 180) + aacYawValue.get(), placeRotation.rotation.pitch)
-                }
-                "vanilla", "snap", "backsnap" -> {
-                    placeRotation.rotation
-                }
-                "ncp" -> {
-                    val arrayOfFloat: FloatArray = getRotations(
-                        placeRotation.placeInfo.blockPos,
-                        placeRotation.placeInfo.enumFacing
-                    )
-                    val yaw = arrayOfFloat[0]
-                    val pitch = arrayOfFloat[1]
-                    Rotation(yaw, pitch)
-                }
-                "aac4" -> {
-                    var diffYaw = 0
-                    if (mc.thePlayer.movementInput.moveForward > 0) diffYaw = 180
-                    if (mc.thePlayer.movementInput.moveForward < 0) diffYaw = 0
-                    RotationUtils.setTargetRotation(
-                        Rotation(mc.thePlayer.rotationYaw + diffYaw, 90f),
-                        keepLengthValue.get()
-                    )
-                    Rotation(mc.thePlayer.rotationYaw + diffYaw, 90f)
-                }
-                "test1" -> {
-                    val caluyaw = ((placeRotation.rotation.yaw / 45).roundToInt() * 45).toFloat()
-                    Rotation(caluyaw + changeYaw, placeRotation.rotation.pitch + changePitch)
-                }
-                "test2" -> {
-                    Rotation(((MovementUtils.direction * 180f / Math.PI).toFloat() + 135) + changeYaw, placeRotation.rotation.pitch + changePitch)
-                }
-                "backwards" -> {
-                    var calcyaw = ((MovementUtils.movingYaw - 180) / 45).roundToInt() * 45
-                    var calcpitch = 0f
-                    if (calcyaw % 90 == 0) {
-                        calcpitch = 82f
-                    } else {
-                        calcpitch = 78f
-                    }
-                    Rotation(calcyaw.toFloat(), calcpitch)
-                }
-                "custom" -> {
-                    Rotation(mc.thePlayer.rotationYaw + customYawValue.get() + changeYaw, customPitchValue.get().toFloat() + changePitch)
-                }
-                "advanced" -> {
-                    var advancedYaw = 0f
-                    var advancedPitch = 0f
-                    advancedYaw = when (advancedYawModeValue.get().lowercase()) {
-                        "offset" -> placeRotation.rotation.yaw + advancedYawOffsetValue.get()
-                        "static" -> mc.thePlayer.rotationYaw + advancedYawStaticValue.get()
-                        "vanilla" -> placeRotation.rotation.yaw
-                        "round" -> ((placeRotation.rotation.yaw / advancedYawRoundValue.get()).roundToInt() * advancedYawRoundValue.get()).toFloat()
-                        "roundstatic" -> (((mc.thePlayer.rotationYaw + advancedYawStaticValue.get()) / advancedYawRoundValue.get()).roundToInt() * advancedYawRoundValue.get()).toFloat()
-                        "movedirection" -> MovementUtils.movingYaw - 180
-                        "offsetmove" -> MovementUtils.movingYaw - 180 + advancedYawMoveOffsetValue.get()
-                        else -> placeRotation.rotation.yaw
-                    }
-                    advancedPitch = when (advancedPitchModeValue.get().lowercase()) {
-                        "offset" -> placeRotation.rotation.pitch + advancedPitchOffsetValue.get().toFloat()
-                        "static" -> advancedPitchStaticValue.get().toFloat()
-                        "vanilla" -> placeRotation.rotation.pitch
-                        else -> placeRotation.rotation.pitch
-                    }
-                    Rotation(advancedYaw, advancedPitch)
-                }
-                else -> return false // this should not happen
-            }
-            if (silentRotationValue.get()) {
-                val limitedRotation =
-                    RotationUtils.limitAngleChange(RotationUtils.serverRotation, lockRotation!!, rotationSpeed)
-                if (rotationsValue.equals("Snap") || rotationsValue.equals("BackSnap")) {
-                    RotationUtils.setTargetRotation(limitedRotation, 0)
-                } else {
-                    RotationUtils.setTargetRotation(limitedRotation, keepLengthValue.get())
-                }
-            } else {
-                mc.thePlayer.rotationYaw = lockRotation!!.yaw
-                mc.thePlayer.rotationPitch = lockRotation!!.pitch
-            }
-        }
-        targetPlace = placeRotation.placeInfo
+
+        this.placeRotation = placeRotation
         return true
     }
 
     /**
-     * @return hotbar blocks amount
+     * For expand scaffold, fixes vector values that should match according to direction vector
      */
-    private val blocksAmount: Int
-        get() {
-            var amount = 0
-            for (i in 36..44) {
-                val itemStack = mc.thePlayer.inventoryContainer.getSlot(i).stack
-                if (itemStack != null && itemStack.item is ItemBlock && InventoryUtils.canPlaceBlock((itemStack.item as ItemBlock).block)) {
-                    amount += itemStack.stackSize
+    private fun modifyVec(original: Vec3, direction: EnumFacing, pos: Vec3, shouldModify: Boolean): Vec3 {
+        if (!shouldModify) {
+            return original
+        }
+
+        val x = original.xCoord
+        val y = original.yCoord
+        val z = original.zCoord
+
+        val side = direction.opposite
+
+        return when (side.axis ?: return original) {
+            EnumFacing.Axis.Y -> Vec3(x, pos.yCoord + side.directionVec.y.coerceAtLeast(0), z)
+            EnumFacing.Axis.X -> Vec3(pos.xCoord + side.directionVec.x.coerceAtLeast(0), y, z)
+            EnumFacing.Axis.Z -> Vec3(x, y, pos.zCoord + side.directionVec.z.coerceAtLeast(0))
+        }
+
+    }
+
+    private fun findTargetPlace(
+        pos: BlockPos, offsetPos: BlockPos, vec3: Vec3, side: EnumFacing, eyes: Vec3, maxReach: Float, raycast: Boolean,
+    ): PlaceRotation? {
+        val world = mc.theWorld ?: return null
+
+        val vec = (Vec3(pos) + vec3).addVector(
+            side.directionVec.x * vec3.xCoord, side.directionVec.y * vec3.yCoord, side.directionVec.z * vec3.zCoord
+        )
+
+        val distance = eyes.distanceTo(vec)
+
+        if (raycast && (distance > maxReach || world.rayTraceBlocks(eyes, vec, false, true, false) != null)) {
+            return null
+        }
+
+        val diff = vec - eyes
+
+        if (side.axis != EnumFacing.Axis.Y) {
+            val dist = abs(if (side.axis == EnumFacing.Axis.Z) diff.zCoord else diff.xCoord)
+
+            if (dist < minDist && scaffoldMode != "Telly") {
+                return null
+            }
+        }
+
+        val baseRotation = toRotation(vec, false).fixedSensitivity()
+        val rotation = applyRotationMode(baseRotation)
+        val rotationForPlacement = if (usesLegacyRotationPlacement) baseRotation else rotation
+
+        // If the current rotation already looks at the target block and side, then return right here
+        performBlockRaytrace(currRotation, maxReach)?.let { raytrace ->
+            if (raytrace.typeOfHit.isBlock && raytrace.blockPos == offsetPos && (!raycast || raytrace.sideHit == side.opposite)) {
+                return PlaceRotation(
+                    PlaceInfo(
+                        raytrace.blockPos, side.opposite, modifyVec(raytrace.hitVec, side, Vec3(offsetPos), !raycast)
+                    ), currRotation
+                )
+            }
+        }
+
+        val raytrace = performBlockRaytrace(rotationForPlacement, maxReach) ?: return null
+        val validTarget = raytrace.typeOfHit.isBlock && raytrace.blockPos == offsetPos
+        val validSide = !raycast || raytrace.sideHit == side.opposite
+        val rotationReady = canUpdateRotation(currRotation, rotationForPlacement, 1)
+
+        if (validTarget && validSide && rotationReady) {
+            return PlaceRotation(
+                PlaceInfo(
+                    raytrace.blockPos, side.opposite, modifyVec(raytrace.hitVec, side, Vec3(offsetPos), !raycast)
+                ), rotation
+            )
+        }
+
+        return null
+    }
+
+    private fun performBlockRaytrace(rotation: Rotation, maxReach: Float): MovingObjectPosition? {
+        val player = mc.thePlayer ?: return null
+        val world = mc.theWorld ?: return null
+
+        val eyes = player.eyes
+        val rotationVec = getVectorForRotation(rotation)
+
+        val reach = eyes + (rotationVec * maxReach.toDouble())
+
+        return world.rayTraceBlocks(eyes, reach, false, false, true)
+    }
+
+    private fun compareDifferences(
+        new: PlaceRotation, old: PlaceRotation?, rotation: Rotation = currRotation,
+    ): PlaceRotation {
+        if (old == null || rotationDifference(new.rotation, rotation) < rotationDifference(old.rotation, rotation)) {
+            return new
+        }
+
+        return old
+    }
+
+    private fun findBlockToSwitchNextTick(stack: ItemStack) {
+        if (autoBlock in arrayOf("Off", "Switch")) return
+
+        val switchAmount = if (earlySwitch) amountBeforeSwitch else 0
+
+        if (stack.stackSize > switchAmount) return
+
+        val switchSlot = if (earlySwitch) {
+            InventoryUtils.findBlockStackInHotbarGreaterThan(amountBeforeSwitch) ?: InventoryUtils.findBlockInHotbar()
+            ?: return
+        } else {
+            InventoryUtils.findBlockInHotbar()
+        } ?: return
+
+        SilentHotbar.selectSlotSilently(
+            this,
+            switchSlot,
+            render = autoBlock in arrayOf("Pick", "FakeSpoof"),
+            renderFirstPerson = autoBlock == "Pick",
+            resetManually = true
+        )
+    }
+
+    private fun updatePlacedBlocksForTelly() {
+        if (blocksUntilAxisChange > horizontalPlacements + verticalPlacements) {
+            blocksUntilAxisChange = 0
+
+            horizontalPlacements = horizontalPlacementsRange.random()
+            verticalPlacements = verticalPlacementsRange.random()
+            return
+        }
+
+        blocksUntilAxisChange++
+    }
+
+    private fun advancePlaceYawJitter() {
+        if (scaffoldMode != "Telly") return
+        // pick a new nonzero step different from the last so consecutive place yaws never repeat
+        placeYawJitterSteps = (-3..3).filter { it != 0 && it != placeYawJitterSteps }.random()
+    }
+
+    private fun tryToPlaceBlock(
+        stack: ItemStack, clickPos: BlockPos, side: EnumFacing, hitVec: Vec3, attempt: Boolean = false,
+        onSuccess: () -> Unit = { }
+    ): Boolean {
+        val thePlayer = mc.thePlayer ?: return false
+
+        val prevSize = stack.stackSize
+        val suppressFirstPersonSwitchAnimation = autoBlock == "FakeSpoof" && SilentHotbar.isSlotModified(this)
+
+        val motionSprintActive = sprint && sprintMode == "MotionSprint" && thePlayer.isMoving
+        if (motionSprintActive) {
+            sendPacket(C0BPacketEntityAction(thePlayer, C0BPacketEntityAction.Action.STOP_SPRINTING))
+        }
+
+        val clickedSuccessfully = thePlayer.onPlayerRightClick(clickPos, side, hitVec, stack)
+
+        if (motionSprintActive) {
+            sendPacket(C0BPacketEntityAction(thePlayer, C0BPacketEntityAction.Action.START_SPRINTING))
+        }
+
+        if (clickedSuccessfully) {
+            if (!attempt) {
+                delayTimer.reset()
+
+                if (thePlayer.onGround) {
+                    thePlayer.motionX *= speedModifier
+                    thePlayer.motionZ *= speedModifier
                 }
             }
-            return amount
+
+            if (swing) thePlayer.swingItem()
+            else sendPacket(C0APacketAnimation())
+
+            if (isManualJumpOptionActive) blocksPlacedUntilJump++
+
+            updatePlacedBlocksForTelly()
+            advancePlaceYawJitter()
+
+            if (stack.stackSize <= 0) {
+                thePlayer.inventory.mainInventory[SilentHotbar.currentSlot] = null
+                ForgeEventFactory.onPlayerDestroyItem(thePlayer, stack)
+            } else if (!suppressFirstPersonSwitchAnimation && (stack.stackSize != prevSize || mc.playerController.isInCreativeMode)) {
+                mc.entityRenderer.itemRenderer.resetEquippedProgress()
+            }
+
+            placeRotation = null
+
+            placedBlocksWithoutEagle++
+
+            onSuccess()
+        } else {
+            if (thePlayer.sendUseItem(stack) && !suppressFirstPersonSwitchAnimation) {
+                mc.entityRenderer.itemRenderer.resetEquippedProgress2()
+            }
         }
 
-    private val rotationSpeed: Float
-        get() = (Math.random() * (maxRotationSpeedValue.get() - minRotationSpeedValue.get()) + minRotationSpeedValue.get()).toFloat()
+        return clickedSuccessfully
+    }
 
-    @EventTarget
-    fun onJump(event: JumpEvent) {
-        if (towerStatus) {
-            event.cancelEvent()
+    fun handleMovementOptions(input: MovementInput) {
+        val player = mc.thePlayer ?: return
+
+        if (!state) {
+            return
+        }
+
+        if (!slow && speedLimiter && MovementUtils.speed > speedLimit) {
+            input.moveStrafe = 0f
+            input.moveForward = 0f
+            return
+        }
+
+        when (zitterMode.lowercase()) {
+            "off" -> {
+                return
+            }
+
+            "smooth" -> {
+                val notOnGround = !player.onGround || !player.isCollidedVertically
+
+                if (player.onGround) {
+                    input.sneak = eagleSneaking || GameSettings.isKeyDown(mc.gameSettings.keyBindSneak)
+                }
+
+                if (input.jump || mc.gameSettings.keyBindJump.isKeyDown || notOnGround) {
+                    zitterTickTimer.reset()
+
+                    if (useSneakMidAir) {
+                        input.sneak = true
+                    }
+
+                    if (!notOnGround && !input.jump) {
+                        // Attempt to move against the direction
+                        input.moveStrafe = if (zitterDirection) 1f else -1f
+                    } else {
+                        input.moveStrafe = 0f
+                    }
+
+                    zitterDirection = !zitterDirection
+
+                    // Recreate input in case the user was indeed pressing inputs
+                    if (mc.gameSettings.keyBindLeft.isKeyDown) {
+                        input.moveStrafe++
+                    }
+
+                    if (mc.gameSettings.keyBindRight.isKeyDown) {
+                        input.moveStrafe--
+                    }
+                    return
+                }
+
+                if (zitterTickTimer.hasTimePassed()) {
+                    zitterDirection = !zitterDirection
+                    zitterTickTimer.reset()
+                } else {
+                    zitterTickTimer.update()
+                }
+
+                if (zitterDirection) {
+                    input.moveStrafe = -1f
+                } else {
+                    input.moveStrafe = 1f
+                }
+            }
+
+            "teleport" -> {
+                MovementUtils.strafe(zitterSpeed)
+                val yaw = (player.rotationYaw + if (zitterDirection) 90.0 else -90.0).toRadians()
+                player.motionX -= sin(yaw) * zitterStrength
+                player.motionZ += cos(yaw) * zitterStrength
+                zitterDirection = !zitterDirection
+            }
         }
     }
 
-    fun getRotations(paramBlockPos: BlockPos, paramEnumFacing: EnumFacing): FloatArray {
-        val d1 = paramBlockPos.x + 0.5 - mc.thePlayer.posX + paramEnumFacing.frontOffsetX / 2.0
-        val d2 = paramBlockPos.z + 0.5 - mc.thePlayer.posZ + paramEnumFacing.frontOffsetZ / 2.0
-        val d3 = mc.thePlayer.posY + mc.thePlayer.getEyeHeight() - (paramBlockPos.y + 0.5)
-        val d4 = MathHelper.sqrt_double(d1 * d1 + d2 * d2).toDouble()
-        var f1 = (atan2(d2, d1) * 180.0 / 3.141592653589793).toFloat() - 90.0f
-        val f2 = (atan2(d3, d4) * 180.0 / 3.141592653589793).toFloat()
-        if (f1 < 0.0f) {
-            f1 += 360.0f
-        }
-        return floatArrayOf(f1, f2)
-    }
+    private var isOnRightSide = false
 
     val canSprint: Boolean
-        get() = MovementUtils.isMoving() && when (sprintValue.get().lowercase()) {
-            "always", "hypixel" -> true
-            "dynamic" -> mc.gameSettings.keyBindSprint.isPressed
-            "onground" -> mc.thePlayer.onGround
-            "offground" -> !mc.thePlayer.onGround
-            else -> false
+        get() {
+            val player = mc.thePlayer ?: return false
+
+            return when (sprintMode) {
+                "OnlyOnGround" -> player.onGround
+                "OnlyInAir" -> !player.onGround
+                else -> true
+            }
         }
 
-    override val tag: String
-        get() = if (towerStatus) { "Towering" } else { "Moving" }
+    private fun movementDirectionYaw(): Float = MovementUtils.direction.toDegreesF()
+
+    private fun backwardsPitch(yaw: Float): Float = if ((round(yaw / 45f) * 45f) % 90f == 0f) 82f else 78f
+
+    private fun applyRotationMode(baseRotation: Rotation): Rotation {
+        val player = mc.thePlayer ?: return baseRotation
+
+        val roundYaw90 = round(baseRotation.yaw / 90f) * 90f
+        val roundYaw45 = round(baseRotation.yaw / 45f) * 45f
+        val movingYaw = movementDirectionYaw() - 180f
+
+        val rotation = when (activeRotationMode) {
+            "Stabilized" -> Rotation(roundYaw45, baseRotation.pitch)
+            "ReverseYaw" -> Rotation(if (!isLookingDiagonally) roundYaw90 else roundYaw45, baseRotation.pitch)
+            "AAC" -> Rotation(
+                player.rotationYaw + if (player.movementInput.moveForward < 0) 0f else 180f + aacYawOffset,
+                baseRotation.pitch
+            )
+            "Custom" -> Rotation(player.rotationYaw + customYaw, customPitch)
+            "Backwards" -> {
+                val yaw = round(movingYaw / 45f) * 45f
+                Rotation(yaw, backwardsPitch(yaw))
+            }
+            "Advanced" -> {
+                val advancedYaw = when (advancedYawMode) {
+                    "Offset" -> baseRotation.yaw + advancedYawOffset
+                    "Static" -> player.rotationYaw + advancedYawStatic
+                    "RoundStatic" -> round((player.rotationYaw + advancedYawStatic) / advancedYawRoundValue) * advancedYawRoundValue
+                    "Vanilla" -> baseRotation.yaw
+                    "Round" -> round(baseRotation.yaw / advancedYawRoundValue) * advancedYawRoundValue
+                    "MoveDirection" -> movingYaw
+                    "OffsetMove" -> movingYaw + advancedYawMoveOffset
+                    "RoundMoveDir" -> round((baseRotation.yaw - movingYaw) / advancedYawRoundValue) * advancedYawRoundValue + movingYaw
+                    else -> baseRotation.yaw
+                }
+                val advancedPitch = when (advancedPitchMode) {
+                    "Offset" -> baseRotation.pitch + advancedPitchOffset
+                    "Static" -> advancedPitchStatic
+                    "Backwards" -> backwardsPitch(advancedYaw)
+                    else -> baseRotation.pitch
+                }
+                Rotation(advancedYaw, advancedPitch)
+            }
+            else -> baseRotation
+        }
+
+        // Anti-DuplicateRotPlace: Telly's mode-quantized place yaw is bit-identical every place, so
+        // GrimAC sees a repeated yaw delta and flags. Nudge by a GCD-quantized step (a multiple of the
+        // sensitivity GCD, so AimA/GCD detection stays clean); the step advances only per successful
+        // place, keeping every candidate within one search consistent while consecutive places differ
+        // by >= 1 GCD (well above the 0.0001 duplicate threshold, still on the block face).
+        if (scaffoldMode == "Telly") {
+            return Rotation(
+                rotation.yaw + placeYawJitterSteps * getFixedAngleDelta(),
+                rotation.pitch
+            ).fixedSensitivity()
+        }
+
+        return rotation.fixedSensitivity()
+    }
+
+    /**
+     * God-bridge rotation generation method.
+     *
+     * Credits to @opZywl
+     */
+    private fun generateGodBridgeRotations(ticks: Int) {
+        val player = mc.thePlayer ?: return
+
+        val direction = if (options.applyServerSide) {
+            MovementUtils.direction.toDegreesF() + 180f
+        } else MathHelper.wrapAngleTo180_float(player.rotationYaw)
+
+        val movingYaw = round(direction / 45) * 45
+
+        val steps45 = arrayListOf(-135f, -45f, 45f, 135f)
+
+        val isMovingStraight = if (options.applyServerSide) {
+            movingYaw % 90 == 0f
+        } else movingYaw in steps45 && player.movementInput.isSideways
+
+        if (!player.isNearEdge(2.5f)) return
+
+        if (!player.isMoving) {
+            placeRotation?.run {
+                val axisMovement = floor(this.rotation.yaw / 90) * 90
+
+                val yaw = axisMovement + 45f
+                val pitch = 75f
+
+                setRotation(Rotation(yaw, pitch), ticks)
+                return
+            }
+
+            if (!options.keepRotation) return
+        }
+
+        val rotation = if (isMovingStraight) {
+            if (player.onGround) {
+                isOnRightSide = floor(player.posX + cos(movingYaw.toRadians()) * 0.5) != floor(player.posX) || floor(
+                    player.posZ + sin(movingYaw.toRadians()) * 0.5
+                ) != floor(player.posZ)
+
+                val posInDirection =
+                    BlockPos(player.positionVector.offset(EnumFacing.fromAngle(movingYaw.toDouble()), 0.6))
+
+                val isLeaningOffBlock = player.position.down().block == air
+                val nextBlockIsAir = posInDirection.down().block == air
+
+                if (isLeaningOffBlock && nextBlockIsAir) {
+                    isOnRightSide = !isOnRightSide
+                }
+            }
+
+            val side = if (options.applyServerSide) {
+                if (isOnRightSide) 45f else -45f
+            } else 0f
+
+            Rotation(movingYaw + side, if (useOptimizedPitch) 73.5f else customGodPitch)
+        } else {
+            Rotation(movingYaw, 75.6f)
+        }.fixedSensitivity()
+
+        godBridgeTargetRotation = rotation
+
+        setRotation(rotation, ticks)
+    }
+
+    override val tag
+        get() = if (towerMode != "None") ("$scaffoldMode | $towerMode") else scaffoldMode
+
+    data class ExtraClickInfo(val delay: Int, val lastClick: Long, var clicks: Int)
 }
