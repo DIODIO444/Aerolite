@@ -12,6 +12,7 @@ import net.ccbluex.liquidbounce.utils.RenderUtil
 import net.ccbluex.liquidbounce.utils.render.ColorUtils
 import net.ccbluex.liquidbounce.utils.render.RenderUtils
 import net.ccbluex.liquidbounce.utils.render.Translate
+import kotlin.math.abs
 import net.ccbluex.liquidbounce.utils.timer.MSTimer
 import net.ccbluex.liquidbounce.value.BoolValue
 import net.minecraft.client.gui.GuiGameOver
@@ -235,7 +236,7 @@ class JelloTabGui : Module() {
         enabler()
         enablerScissorBox()
 
-        categoryAnimaiton.translate(0f , selectedCategory * 15f , 2.0)
+        categoryAnimaiton.y = slide(categoryAnimaiton.y, selectedCategory * 15f)
         val categorysupery = if(categoryAnimaiton.y - 60f > 0) categoryAnimaiton.y - 60f else 0f
 
         if(!notselectrect.get()) {
@@ -257,10 +258,10 @@ class JelloTabGui : Module() {
         categoryPositonY = 0f
         Modulecategory.forEachIndexed { index, category ->
 
-            category.animation.translate(if(selectedCategory == index) 15f else 5f , 0f ,  2.0 )
+            category.animation.x = slide(category.animation.x, if (selectedCategory == index) 14f else 0f)
 
             val font = Fonts.fontJello
-            font.drawString(category.displayname, x + category.animation.x , y + 5f + categoryPositonY - categorysupery, -1)
+            font.drawString(category.displayname, x + 5f + category.animation.x , y + 5f + categoryPositonY - categorysupery, -1)
             categoryPositonY += 15f
         }
 
@@ -268,7 +269,7 @@ class JelloTabGui : Module() {
         disabler()
 
         enabler()
-        moduleAnimaiton.translate(0f , selecteModuleindex * 15f , 2.0)
+        moduleAnimaiton.y = slide(moduleAnimaiton.y, selecteModuleindex * 15f)
 
         val modulesupery = if(moduleAnimaiton.y - 150f > 0) moduleAnimaiton.y - 150f else 0f
         val positiony = (if(ModulePositonY >= 165) 165f else ModulePositonY)
@@ -305,13 +306,28 @@ class JelloTabGui : Module() {
         GL11.glEnable(GL11.GL_SCISSOR_TEST)
         ModulePositonY = 0f
         selecteModule.forEachIndexed {index , module ->
-            module.tab.translate(if(selecteModuleindex == index) 15f else 5f , 0f , 2.0)
+            module.tab.x = slide(module.tab.x, if (selecteModuleindex == index) 14f else 0f)
             val font = Fonts.fontJello
-            font.drawString(module.name, x + width1 + 10 + module.tab.x, y + 5f + ModulePositonY - modulesupery , -1)
+            font.drawString(module.name, x + width1 + 15f + module.tab.x, y + 5f + ModulePositonY - modulesupery , -1)
             ModulePositonY += 15f
         }
         GL11.glDisable(GL11.GL_SCISSOR_TEST)
         disabler()
+    }
+
+    /**
+     * Sigma style easing: move [current] towards [target] by at most 14% of the remaining distance per
+     * frame (scaled by [speed]). Unlike the old `Translate.translate` this never overshoots, so the
+     * selected entry can not drift far away from the list.
+     */
+    private fun slide(current: Float, target: Float, speed: Float = 2f): Float {
+        val diff = target - current
+
+        if (abs(diff) < 0.01f) return target
+
+        val step = minOf(abs(diff), abs(diff) * 0.14f * speed)
+
+        return current + if (diff > 0) step else -step
     }
 
     private fun updateBackGound() {
