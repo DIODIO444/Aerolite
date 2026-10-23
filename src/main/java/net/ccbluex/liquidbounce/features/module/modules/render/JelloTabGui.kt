@@ -272,18 +272,25 @@ class JelloTabGui : Module() {
         moduleAnimaiton.y = slide(moduleAnimaiton.y, selecteModuleindex * 15f)
 
         val modulesupery = if(moduleAnimaiton.y - 150f > 0) moduleAnimaiton.y - 150f else 0f
-        val positiony = (if(ModulePositonY >= 165) 165f else ModulePositonY)
+        val positiony = minOf(selecteModule.size * 15f, 165f)
 
         if(openModuleGui) {
-            if(gradientBackground.get()) {
-                RenderUtil.R2DUtils.drawGradientRect(90f, 50f, 170f, 216.67f,
+            val panelLeft = x + width1 + 10
+            val panelRight = x + width1 + width1 + 15
+
+            if (gradientBackground.get()) {
+                RenderUtil.R2DUtils.drawGradientRect(
+                    panelLeft, y, panelRight, y + positiony,
                     Color(tR, tG, tB, 255).rgb,
-                    Color(bR, bG, bB, 255).rgb)
+                    Color(bR, bG, bB, 255).rgb
+                )
+            } else {
+                RenderUtils.drawRect(panelLeft, y, panelRight, y + positiony, Color(20, 20, 20, 180).rgb)
             }
 
             RenderUtils.drawShadow(x + width1 + 10, y,  width1 + 5,  positiony + 2f)
 
-            if (blur.get()) BlurUtils.blurArea(x + width1 + 90f, y, width1 + 15, positiony + 52.5f, 10F)
+            if (blur.get()) BlurUtils.blurArea(x + width1 + 10, y, x + width1 + width1 + 15, y + positiony, 10F)
 
             if(!notselectrect.get()) {
                 RenderUtils.drawRect(
@@ -302,7 +309,7 @@ class JelloTabGui : Module() {
             }
         }
 
-        RenderUtils.makeScissorBox(x + width1 + 10, y,  x + width1 + width1 + 15, y + positiony)
+        RenderUtils.makeScissorBox(x + width1 + 10, y, x + width1 + width1 + 15, y + positiony)
         GL11.glEnable(GL11.GL_SCISSOR_TEST)
         ModulePositonY = 0f
         selecteModule.forEachIndexed {index , module ->

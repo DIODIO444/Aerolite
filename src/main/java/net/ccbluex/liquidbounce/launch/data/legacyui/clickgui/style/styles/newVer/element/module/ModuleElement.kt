@@ -7,12 +7,14 @@ import net.ccbluex.liquidbounce.launch.data.legacyui.clickgui.style.styles.newVe
 import net.ccbluex.liquidbounce.ui.client.gui.newVer.element.module.value.impl.BooleanElement
 import net.ccbluex.liquidbounce.ui.client.gui.newVer.element.module.value.impl.ListElement
 import net.ccbluex.liquidbounce.ui.client.gui.newVer.element.module.value.impl.IntElement
+import net.ccbluex.liquidbounce.ui.client.gui.newVer.element.module.value.impl.IntRangeElement
 import net.ccbluex.liquidbounce.ui.client.gui.newVer.element.module.value.impl.FloatElement
 import net.ccbluex.liquidbounce.ui.client.gui.newVer.element.module.value.impl.GroupElement
 import net.ccbluex.liquidbounce.config.Configurable
 import net.ccbluex.liquidbounce.launch.data.legacyui.ClickGUIModule
 import net.ccbluex.liquidbounce.value.Value
 import net.ccbluex.liquidbounce.launch.data.legacyui.clickgui.style.styles.newVer.extensions.animSmooth
+import net.ccbluex.liquidbounce.config.IntegerRangeValue
 import net.ccbluex.liquidbounce.ui.font.Fonts
 import net.ccbluex.liquidbounce.utils.ClientUtils
 import net.ccbluex.liquidbounce.utils.render.BlendUtils
@@ -58,6 +60,8 @@ class ModuleElement(val module: Module): MinecraftInstance() {
                     valueElements.add(ListElement(value))
                 if (value is IntegerValue)
                     valueElements.add(IntElement(value))
+                if (value is IntegerRangeValue)
+                    valueElements.add(IntRangeElement(value))
                 if (value is FloatValue)
                     valueElements.add(FloatElement(value))
             }
@@ -76,6 +80,7 @@ class ModuleElement(val module: Module): MinecraftInstance() {
         is BoolValue -> BooleanElement(value)
         is ListValue -> ListElement(value)
         is IntegerValue -> IntElement(value)
+        is IntegerRangeValue -> IntRangeElement(value)
         is FloatValue -> FloatElement(value)
         else -> null
     }
