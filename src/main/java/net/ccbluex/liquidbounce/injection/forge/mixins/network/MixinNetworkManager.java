@@ -61,6 +61,15 @@ public abstract class MixinNetworkManager implements IMixinNetworkManager {
             callback.cancel();
     }
 
+    /**
+     * Fires for every packet that is really written to the wire (event path and silent sends).
+     * Lets the rotation manager track the rotation the server has actually received.
+     */
+    @Inject(method = "dispatchPacket", at = @At("HEAD"))
+    private void dispatched(Packet<?> packet, GenericFutureListener<? extends Future<? super Void>>[] listeners, CallbackInfo callback) {
+        net.ccbluex.liquidbounce.utils.rotation.RotationUtils.INSTANCE.onPacketDispatched(packet);
+    }
+
     @Inject(method = "sendPacket(Lnet/minecraft/network/Packet;)V", at = @At("HEAD"), cancellable = true)
     private void send(Packet<?> packet, CallbackInfo callback) {
         if(PacketUtils.INSTANCE.getPacketType(packet) != PacketUtils.PacketType.CLIENTSIDE)

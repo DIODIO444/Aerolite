@@ -279,13 +279,14 @@ class JelloTabGui : Module() {
             val panelRight = x + width1 + width1 + 15
 
             if (gradientBackground.get()) {
+                // Keep it translucent so the blurred world stays visible behind the module list.
                 RenderUtil.R2DUtils.drawGradientRect(
                     panelLeft, y, panelRight, y + positiony,
-                    Color(tR, tG, tB, 255).rgb,
-                    Color(bR, bG, bB, 255).rgb
+                    Color(tR, tG, tB, 40).rgb,
+                    Color(bR, bG, bB, 40).rgb
                 )
             } else {
-                RenderUtils.drawRect(panelLeft, y, panelRight, y + positiony, Color(20, 20, 20, 180).rgb)
+                RenderUtils.drawRect(panelLeft, y, panelRight, y + positiony, Color(20, 20, 20, 90).rgb)
             }
 
             RenderUtils.drawShadow(x + width1 + 10, y,  width1 + 5,  positiony + 2f)
