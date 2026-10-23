@@ -165,7 +165,19 @@ public abstract class MixinEntityPlayerSP extends MixinAbstractClientPlayer {
                 float lastReportedYaw = RotationUtils.serverRotation.getYaw();
                 float lastReportedPitch = RotationUtils.serverRotation.getPitch();
 
-                if (RotationUtils.targetRotation != null) {
+                // The nextgen rotation system (KillAura, BlockFly, ...) keeps its own state; the legacy
+                // one is still used by Aimbot/StrafeFix and friends, so prefer the new one when active.
+                final net.ccbluex.liquidbounce.utils.rotation.RotationUtils nextgenRotations =
+                        net.ccbluex.liquidbounce.utils.rotation.RotationUtils.INSTANCE;
+                final net.ccbluex.liquidbounce.utils.rotation.Rotation nextgenRotation = nextgenRotations.getCurrentRotation();
+
+                if (nextgenRotation != null) {
+                    lastReportedYaw = nextgenRotations.getServerRotation().getYaw();
+                    lastReportedPitch = nextgenRotations.getServerRotation().getPitch();
+
+                    yaw = nextgenRotation.getYaw();
+                    pitch = nextgenRotation.getPitch();
+                } else if (RotationUtils.targetRotation != null) {
                     yaw = RotationUtils.targetRotation.getYaw();
                     pitch = RotationUtils.targetRotation.getPitch();
                 }

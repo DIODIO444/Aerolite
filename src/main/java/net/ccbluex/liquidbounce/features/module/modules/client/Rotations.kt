@@ -1,38 +1,169 @@
-
 /*
  * FDPClient Hacked Client
- * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge by LiquidBounce.
- * https://github.com/laoshuikaixue/FDPClient
+ * A free open source mixin-based injection hacked client for Minecraft using Minecraft Forge.
+ * https://github.com/SkidderMC/FDPClient/
  */
 package net.ccbluex.liquidbounce.features.module.modules.client
 
 import net.ccbluex.liquidbounce.LiquidBounce
-import net.ccbluex.liquidbounce.event.EventTarget
-import net.ccbluex.liquidbounce.event.PacketEvent
+import net.ccbluex.liquidbounce.config.boolean
+import net.ccbluex.liquidbounce.config.choices
+import net.ccbluex.liquidbounce.config.color
+import net.ccbluex.liquidbounce.config.float
+import net.ccbluex.liquidbounce.event.EventState
+import net.ccbluex.liquidbounce.event.MotionEvent
+import net.ccbluex.liquidbounce.event.Render3DEvent
+import net.ccbluex.liquidbounce.event.handler
+import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
-import net.ccbluex.liquidbounce.features.module.ModuleCategory
-import net.ccbluex.liquidbounce.features.module.ModuleInfo
-import net.ccbluex.liquidbounce.features.module.modules.combat.BowAimbot
-import net.ccbluex.liquidbounce.features.module.modules.combat.KillAura
-import net.ccbluex.liquidbounce.features.module.modules.exploit.Disabler
-import net.ccbluex.liquidbounce.features.module.modules.movement.Flight
-import net.ccbluex.liquidbounce.features.module.modules.world.BlockFly
-import net.ccbluex.liquidbounce.features.module.modules.world.ChestAura
-import net.ccbluex.liquidbounce.features.module.modules.world.Fucker
-import net.ccbluex.liquidbounce.value.BoolValue
-import net.ccbluex.liquidbounce.value.ListValue
-import net.minecraft.network.play.client.C03PacketPlayer
+import net.ccbluex.liquidbounce.features.module.modules.render.FreeCam
+import net.ccbluex.liquidbounce.utils.render.Render3D
+import net.ccbluex.liquidbounce.utils.rotation.Rotation
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.currentRotation
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.getVectorForRotation
+import net.ccbluex.liquidbounce.utils.rotation.RotationUtils.serverRotation
+import net.minecraft.util.MathHelper
+import java.awt.Color
 
-@ModuleInfo(name = "Rotations", category = ModuleCategory.CLIENT, canEnable = false)
-object Rotations : Module() {
-    val headValue = BoolValue("Head", true)
-    val bodyValue = BoolValue("Body", false)
-    val fixedValue = ListValue("SensitivityFixed", arrayOf("None", "Old", "New"), "New")
-    val nanValue = BoolValue("NaNCheck", true)
-    private val debugValue = BoolValue("Debug", false)
+object Rotations : Module("Rotations", Category.CLIENT, Category.SubCategory.CLIENT_GENERAL, gameDetecting = false) {
+
+    private val realistic by boolean("Realistic", true)
+        .describe("Mimic the game head and body rotation logic.")
+    private val body by boolean("Body", true) { !realistic }
+        .describe("Rotate the body along with the head.")
+
+    private val smoothRotations by boolean("SmoothRotations", false)
+        .describe("Interpolate rotations for smoother movement.")
+    private val smoothingFactor by float("SmoothFactor", 0.15f, 0.1f..0.9f) { smoothRotations }
+        .describe("How quickly smoothed rotations reach the target.")
+
+    val ghost by boolean("Ghost", false)
+        .describe("Render a ghost showing the server rotation.")
+
+    val color by color("Color", Color(110, 0, 120)) { ghost }
+        .describe("Color of the rotation ghost.")
+
+    val debugRotations by boolean("DebugRotations", false)
+        .describe("Enable optional rotation diagnostics.")
+    private val debugMode by choices("DebugMode", arrayOf("Vector", "Chat", "Both"), "Vector") { debugRotations }
+        .describe("Choose visual, chat, or combined rotation diagnostics.")
+    private val debugVectorLength by float("DebugVectorLength", 4f, 0.5f..12f, " blocks") {
+        debugRotations && debugMode != "Chat"
+    }.describe("Length of the server-aim direction vector.")
+    private val debugVectorWidth by float("DebugVectorWidth", 2f, 0.5f..5f) {
+        debugRotations && debugMode != "Chat"
+    }.describe("Width of the server-aim direction vector.")
+    private val debugVectorColor by color("DebugVectorColor", Color(80, 190, 255, 220)) {
+        debugRotations && debugMode != "Chat"
+    }.describe("Color of the server-aim direction vector.")
+
+    init {
+        group("Behavior", "Realistic", "Body", "SmoothRotations", "SmoothFactor")
+        group("Ghost", "Ghost", "Color")
+        group(
+            "Debug",
+            "DebugRotations", "DebugMode", "DebugVectorLength", "DebugVectorWidth", "DebugVectorColor"
+        )
+    }
+
+    var prevHeadPitch = 0f
+    var headPitch = 0f
+
+    private var previousVisibleRotation: Rotation? = null
+    private var currentVisibleRotation: Rotation? = null
+
+    /** FreeCam keeps the real player in place, so its rotation must not be touched. */
+    private val specialCases: Boolean
+        get() = LiquidBounce.moduleManager[FreeCam::class.java]?.shouldDisableRotations() == true
+
+    val onMotion = handler<MotionEvent> { event ->
+        if (event.eventState != EventState.POST)
+            return@handler
+
+        val thePlayer = mc.thePlayer ?: return@handler
+        val sourceRotation = sourceRotation() ?: serverRotation
+        val targetRotation = if (smoothRotations) {
+            smoothRotation(currentVisibleRotation ?: sourceRotation, sourceRotation)
+        } else {
+            sourceRotation
+        }
+
+        previousVisibleRotation = currentVisibleRotation ?: targetRotation
+        currentVisibleRotation = targetRotation
+
+        prevHeadPitch = headPitch
+        headPitch = targetRotation.pitch
+
+        thePlayer.rotationYawHead = targetRotation.yaw
+        if (shouldRotate() && body && !realistic) {
+            thePlayer.renderYawOffset = thePlayer.rotationYawHead
+        }
+    }
+
+    val onRender3D = handler<Render3DEvent> { event ->
+        if (!debugRotations || debugMode == "Chat") return@handler
+        val player = mc.thePlayer ?: return@handler
+        val rotation = getRotation() ?: return@handler
+        val eyes = player.getPositionEyes(event.partialTicks)
+        val direction = getVectorForRotation(rotation)
+        val end = eyes.addVector(
+            direction.xCoord * debugVectorLength,
+            direction.yCoord * debugVectorLength,
+            direction.zCoord * debugVectorLength
+        )
+        Render3D.drawWorldLine(eyes, end, Color(debugVectorColor, true), debugVectorWidth)
+    }
+
+    fun shouldPrintDebug(): Boolean = debugRotations && debugMode != "Vector"
+
+    fun lerp(tickDelta: Float, old: Float, new: Float): Float {
+        return old + (new - old) * tickDelta
+    }
 
     /**
-     * FDPClient-compatible: whether rotation debug messages should be printed (used by RotationUtils).
+     * Rotate when current rotation is not null.
      */
-    fun shouldPrintDebug() = debugValue.get()
+    fun shouldRotate() = state && (specialCases || currentRotation != null)
+
+    /**
+     * Smooth out rotations between two points
+     */
+    private fun smoothRotation(from: Rotation, to: Rotation): Rotation {
+        val diffYaw = MathHelper.wrapAngleTo180_float(to.yaw - from.yaw)
+        val diffPitch = to.pitch - from.pitch
+
+        val smoothedYaw = from.yaw + diffYaw * smoothingFactor
+        val smoothedPitch = from.pitch + diffPitch * smoothingFactor
+
+        return Rotation(smoothedYaw, smoothedPitch)
+    }
+
+    /**
+     * Imitate the game's head and body rotation logic
+     */
+    fun shouldUseRealisticMode() = realistic && shouldRotate()
+
+    /**
+     * Which rotation should the module use?
+     */
+    fun getRotation(): Rotation? {
+        val source = sourceRotation() ?: return null
+        return currentVisibleRotation ?: source
+    }
+
+    /** Rotation used exclusively by rendering, interpolated between simulation ticks. */
+    fun getRenderRotation(partialTicks: Float): Rotation? {
+        if (!shouldRotate()) return null
+        val current = currentVisibleRotation ?: sourceRotation() ?: return null
+        val previous = previousVisibleRotation ?: current
+        val progress = partialTicks.coerceIn(0f, 1f)
+        val yawDifference = MathHelper.wrapAngleTo180_float(current.yaw - previous.yaw)
+
+        return Rotation(
+            previous.yaw + yawDifference * progress,
+            lerp(progress, previous.pitch, current.pitch),
+        )
+    }
+
+    private fun sourceRotation() = if (specialCases) serverRotation else currentRotation
 }

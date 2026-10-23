@@ -22,6 +22,10 @@ import net.minecraft.network.play.server.S08PacketPlayerPosLook
 
 @ModuleInfo(name = "FreeCam", category = ModuleCategory.RENDER, autoDisable = EnumAutoDisableType.RESPAWN)
 class FreeCam : Module() {
+
+    /** Used by the Rotations module: while FreeCam is active the real player must not be rotated. */
+    fun shouldDisableRotations() = handleEvents()
+
     private val speedValue = FloatValue("Speed", 0.8f, 0.1f, 2f)
     private val flyValue = BoolValue("Fly", true)
     private val noClipValue = BoolValue("NoClip", true)

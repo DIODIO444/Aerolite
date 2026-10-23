@@ -12,7 +12,6 @@ import net.ccbluex.liquidbounce.features.module.modules.combat.KillAura;
 import net.ccbluex.liquidbounce.features.module.modules.movement.Jesus;
 import net.ccbluex.liquidbounce.features.module.modules.movement.NoJumpDelay;
 import net.ccbluex.liquidbounce.features.module.modules.movement.Sprint;
-import net.ccbluex.liquidbounce.features.module.modules.movement.StrafeFix;
 import net.ccbluex.liquidbounce.features.module.modules.render.AntiBlind;
 import net.ccbluex.liquidbounce.utils.MovementUtils;
 import net.ccbluex.liquidbounce.utils.RotationUtils;
@@ -86,8 +85,7 @@ public abstract class MixinEntityLivingBase extends MixinEntity {
         /**
          * Jump Process Fix
          * use updateFixState to reset Jump Fix state
-         * @param fixedYaw  The yaw player should have (NOT RotationYaw)
-         * @param strafeFix StrafeFix Module
+         * @param fixedYaw The yaw player should have (NOT RotationYaw)
          */
 
         final JumpEvent jumpEvent = new JumpEvent(MovementUtils.INSTANCE.getJumpMotion());
@@ -97,11 +95,23 @@ public abstract class MixinEntityLivingBase extends MixinEntity {
 
         this.motionY = jumpEvent.getMotion();
         final Sprint sprint = LiquidBounce.moduleManager.getModule(Sprint.class);
-        final StrafeFix strafeFix = LiquidBounce.moduleManager.getModule(StrafeFix.class);
 
         if (this.isSprinting()) {
             float fixedYaw = this.rotationYaw;
-            if(RotationUtils.targetRotation != null && strafeFix.getDoFix()) {
+            final net.ccbluex.liquidbounce.utils.rotation.RotationUtils nextgenRotations =
+                    net.ccbluex.liquidbounce.utils.rotation.RotationUtils.INSTANCE;
+            final net.ccbluex.liquidbounce.utils.rotation.Rotation nextgenRotation = nextgenRotations.getCurrentRotation();
+            final net.ccbluex.liquidbounce.utils.rotation.RotationSettings rotationSettings = nextgenRotations.getActiveSettings();
+
+            // The sprint-jump boost has to use the same yaw as the movement correction, otherwise the
+            // boost goes out along the camera yaw while the server reconstructs it from the sent one.
+            final boolean movementCorrected = rotationSettings != null
+                    && ("Silent".equals(rotationSettings.getModernMovementCorrection())
+                    || "Strict".equals(rotationSettings.getModernMovementCorrection()));
+
+            if (nextgenRotation != null && movementCorrected) {
+                fixedYaw = nextgenRotation.getYaw();
+            } else if (RotationUtils.targetRotation != null) {
                 fixedYaw = RotationUtils.targetRotation.getYaw();
             }
             if(sprint.getState() && sprint.getJumpDirections()) {
