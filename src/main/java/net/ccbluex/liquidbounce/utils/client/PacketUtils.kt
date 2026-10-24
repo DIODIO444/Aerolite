@@ -17,6 +17,7 @@ import net.ccbluex.liquidbounce.utils.rotation.Rotation
 import net.minecraft.entity.EntityLivingBase
 import net.minecraft.network.NetworkManager
 import net.minecraft.network.Packet
+import net.minecraft.network.play.server.S12PacketEntityVelocity
 import net.minecraft.network.play.INetHandlerPlayClient
 import net.minecraft.network.play.client.C03PacketPlayer
 import net.minecraft.network.play.server.*
@@ -36,6 +37,13 @@ object PacketUtils : MinecraftInstance, Listenable {
     fun schedulePacketProcess(elements: Collection<Packet<*>>): Boolean = queueLock.withLock {
         queuedPackets.addAll(elements)
     }
+
+    /** Real (un-compressed) velocity of an S12 packet, in blocks per tick. */
+    fun getRealMotionX(packet: S12PacketEntityVelocity) = packet.motionX / 8000.0
+
+    fun getRealMotionY(packet: S12PacketEntityVelocity) = packet.motionY / 8000.0
+
+    fun getRealMotionZ(packet: S12PacketEntityVelocity) = packet.motionZ / 8000.0
 
     fun schedulePacketProcess(element: Packet<*>): Boolean = queueLock.withLock {
         queuedPackets.add(element)

@@ -814,22 +814,10 @@ object BlockFly : Module("BlockFly", Category.WORLD, Category.SubCategory.MISCEL
             null
         }
 
-        // Gate the placement raycast on the rotation the server actually holds this tick
-        // (serverRotation = the last rotation dispatched on the wire), NOT on the still-interpolating
-        // target. The place packet leaves this GameTickEvent before the tick's own movement packet, so
-        // the server re-runs its block raytrace from serverRotation; placing straight from the target
-        // makes that server-side raytrace miss and the placement is silently rejected (the block "tries"
-        // to place but never appears, and stricter anticheat flags the mismatch). We only place once the
-        // smoothed rotation has genuinely reached the block on the server side; the engine keeps driving
-        // the rotation toward the target through the normal setRotation path, so convergence is quick.
-        //
-        // Telly is the exception: it picks a new block and flicks to it within the same jump, so the
-        // rotation the server holds is always the previous one and this raycast would test last tick's
-        // aim against this tick's target — which never matches, and nothing is ever placed.
-        val raycastRotation = onTickRotation
-            ?: (RotationUtils.serverRotation.copy()
-                .takeIf { raycastProperly && target != null && scaffoldMode != "Telly" })
-            ?: currRotation
+        // Reference Scaffold raytraces from currRotation. That is now safe because RotationSettings
+        // .instant is honoured again (Telly snaps the aim on the tick it aims), so currRotation is
+        // the target rotation instead of a half-finished interpolation.
+        val raycastRotation = onTickRotation ?: currRotation
         val raycast = performBlockRaytrace(raycastRotation, mc.playerController.blockReachDistance)
 
         var alreadyPlaced = false
@@ -877,7 +865,8 @@ object BlockFly : Module("BlockFly", Category.WORLD, Category.SubCategory.MISCEL
                 LOGGER.info(
                     "[TellyDbg] GATE pass=$gatePass airTicks=${mc.thePlayer?.airTicks} onGround=${mc.thePlayer?.onGround} " +
                         "hit=${it?.blockPos} target=${target.blockPos} side=${it?.sideHit}/${target.enumFacing} " +
-                        "srvRot=${RotationUtils.serverRotation}"
+                        "srvRot=${RotationUtils.serverRotation} curRot=$currRotation placeRot=${placeRotation?.rotation} " +
+                        "vec=${target.vec3}"
                 )
             }
 
@@ -1002,6 +991,12 @@ object BlockFly : Module("BlockFly", Category.WORLD, Category.SubCategory.MISCEL
         // block is chosen from where the jump actually took us, not from mid-rotation.
         if (scaffoldMode == "Telly" && player.isMoving && !Tower.isTowering) {
             if (player.airTicks < ticksUntilRotation.random() && ticksUntilJump >= jumpTicks) {
+                // Hold the player's own look on the ground so the jump gate (tellyLookIdle) can open.
+                // Any aim left over from the previous jump must be dropped here as well: otherwise
+                // RotationUtils.currentRotation stays parked on the old block, tellyLookIdle never
+                // matches again and the jump is blocked forever (BlockFly then places nothing).
+                // resetRotation only re-normalises the yaw value, so the visible look is unchanged.
+                RotationUtils.cancelTargetRotation(options, immediate = true)
                 return
             }
 

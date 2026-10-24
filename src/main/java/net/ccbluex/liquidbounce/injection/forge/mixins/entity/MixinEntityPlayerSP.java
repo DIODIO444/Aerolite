@@ -14,6 +14,7 @@ import net.ccbluex.liquidbounce.features.module.modules.movement.Sprint;
 import net.ccbluex.liquidbounce.features.module.modules.world.BlockFly;
 import net.ccbluex.liquidbounce.utils.Rotation;
 import net.ccbluex.liquidbounce.utils.RotationUtils;
+import net.ccbluex.liquidbounce.utils.movement.MovementUtils;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockFence;
 import net.minecraft.block.BlockFenceGate;
@@ -157,6 +158,19 @@ public abstract class MixinEntityPlayerSP extends MixinAbstractClientPlayer {
                 }
 
                 this.serverSneakState = flag1;
+            }
+
+            // Keep the shared air/ground tick counters up to date. Telly (BlockFly) gates its
+            // rotation on MovementUtils.airTicks ("hold the look for N air ticks, then aim"), and
+            // several movement modes read it too -- without this update the field stays 0 forever,
+            // so Telly never aims and can only ever place the block directly under the player.
+            MovementUtils movementUtils = MovementUtils.INSTANCE;
+            if (this.onGround) {
+                movementUtils.setGroundTicks(movementUtils.getGroundTicks() + 1);
+                movementUtils.setAirTicks(0);
+            } else {
+                movementUtils.setGroundTicks(0);
+                movementUtils.setAirTicks(movementUtils.getAirTicks() + 1);
             }
 
             if (this.isCurrentViewEntity()) {

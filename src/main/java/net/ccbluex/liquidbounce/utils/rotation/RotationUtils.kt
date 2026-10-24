@@ -677,14 +677,17 @@ object RotationUtils : MinecraftInstance, Listenable {
         }
 
         targetRotation?.let {
-            limitAngleChange(serverRotation, it, settings).let { rotation ->
-                if (!settings.applyServerSide) {
-                    rotation.toPlayer(player)
-                } else {
-                    currentRotation = rotation.fixedSensitivity()
-                    if (settings.modernMovementCorrection == "ChangeLook") {
-                        currentRotation?.toPlayer(player)
-                    }
+            // `instant` is set by modules that must arrive on the very tick they aim (Telly's
+            // flick-and-place, GodBridge). It used to be ignored, so the aim crept towards the
+            // target over several ticks and BlockFly's raytrace gate never saw the target block in
+            // time -> one block per jump at best. Snap instead of interpolating when requested.
+            val rotation = if (settings.instant) it else limitAngleChange(serverRotation, it, settings)
+            if (!settings.applyServerSide) {
+                rotation.toPlayer(player)
+            } else {
+                currentRotation = rotation.fixedSensitivity()
+                if (settings.modernMovementCorrection == "ChangeLook") {
+                    currentRotation?.toPlayer(player)
                 }
             }
         }

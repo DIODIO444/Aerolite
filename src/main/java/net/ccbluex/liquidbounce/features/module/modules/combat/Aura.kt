@@ -105,7 +105,7 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
         attackDelay = clicker.nextDelay(clickPattern, it.first, it.last)
     }
 
-    private val clickPatternValue = choices("ClickPattern", ClickPatterns.names, "Stabilized") { !simulateCooldown }
+    private val clickPatternValue = choices("ClickPattern", ClickPatterns.names, "Stabilized") { !simulateCooldown }.displayable { false }
     private val clickPatternName: String by clickPatternValue
     private val clickPattern: ClickPattern get() = ClickPatterns.byName(clickPatternName)
     private val clicker = Clicker()
@@ -136,7 +136,7 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
     private val rangeSprintReduction by float("RangeSprintReduction", 0f, 0f..0.4f)
         .describe("Range reduction applied while sprinting.")
     private val rangeChance by int("RangeChance", 100, 1..100, "%")
-        .describe("Chance to use the full range each roll.")
+        .describe("Chance to use the full range each roll.").displayable { false }
     private var rolledRange = -1f
     private var rangeRollCounter = 0
 
@@ -155,12 +155,12 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
             "OnLadder",
             "InLiquid",
             "InWeb"
-        ), "Armor"
+        ), "Distance"
     )
     private val targetMode by choices("TargetMode", arrayOf("Single", "Switch", "Multi"), "Switch")
         .describe("How many targets to engage at once.")
     private val stickyTarget by boolean("StickyTarget", false) { targetMode == "Single" }
-        .describe("Keep the current target while valid instead of re-picking each tick.")
+        .describe("Keep the current target while valid instead of re-picking each tick.").displayable { false }
     private val limitedMultiTargets by int("LimitedMultiTargets", 0, 0..50) { targetMode == "Multi" }
         .describe("Max targets to hit in multi mode, 0 is no limit.")
     private val maxSwitchFOV by float("MaxSwitchFOV", 90f, 30f..180f) { targetMode == "Switch" }
@@ -190,33 +190,37 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
     private val autoF5 by boolean("AutoF5", false)
         .describe("Switch to third person while a target exists.")
     private val onSwording by boolean("OnSwording", true)
-        .describe("Only attack while holding a sword.")
+        .describe("Only attack while holding a sword.").displayable { false }
     private val onScaffold by boolean("OnScaffold", false)
         .describe("Allow attacking while scaffolding.")
     private val onDestroyBlock by boolean("OnDestroyBlock", false)
         .describe("Allow attacking while breaking blocks.")
 
     private val postRotationAttack by boolean("PostRotationAttack", false)
-        .describe("Attack only after the rotation reaches the target.")
+        .describe("Attack only after the rotation reaches the target.").displayable { false }
     private val noScaffold by boolean("NoScaffold", false)
-        .describe("Disable the aura while BlockFly is on.")
+        .describe("Disable the aura while BlockFly is on.").displayable { false }
     private val noFly by boolean("NoFly", false)
-        .describe("Disable the aura while Flight is on.")
+        .describe("Disable the aura while Flight is on.").displayable { false }
     private val noEat by boolean("NoEat", false)
-        .describe("Disable the aura while eating or drinking.")
+        .describe("Disable the aura while eating or drinking.").displayable { false }
     private val noBlocking by boolean("NoBlocking", false)
-        .describe("Disable the aura while using a block item.")
+        .describe("Disable the aura while using a block item.").displayable { false }
     private val blinkCheck by boolean("BlinkCheck", false)
-        .describe("Disable the aura while Blink is on.")
+        .describe("Disable the aura while Blink is on.").displayable { false }
 
     // AutoBlock
-    val autoBlock by choices("AutoBlock", arrayOf("Off", "Packet", "Fake"), "Packet")
+    val autoBlock by choices("AutoBlock", arrayOf("Off", "Packet", "Hypixel50%", "Dual", "Fake"), "Packet")
         .describe("How to auto block with a sword.")
-    private val blockMaxRange by float("BlockMaxRange", 3f, 0f..8f) { autoBlock == "Packet" }
+
+    /** Packet-style blocking also covers the Hypixel50% and Dual variants. */
+    private val isPacketAutoBlock: Boolean
+        get() = autoBlock == "Packet" || autoBlock == "Hypixel50%" || autoBlock == "Dual"
+    private val blockMaxRange by float("BlockMaxRange", 3f, 0f..8f) { isPacketAutoBlock }
         .describe("Max distance at which auto block engages.")
     private val unblockMode by choices(
         "UnblockMode", arrayOf("Stop", "Switch", "Empty"), "Stop"
-    ) { autoBlock == "Packet" }
+    ) { isPacketAutoBlock }
     private val releaseAutoBlock by boolean("ReleaseAutoBlock", true) { autoBlock !in arrayOf("Off", "Fake") }
         .describe("Release the block before each attack.")
     val forceBlockRender by boolean("ForceBlockRender", true) {
@@ -254,7 +258,7 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
     }
 
     // AutoBlock conditions
-    private val smartAutoBlock by boolean("SmartAutoBlock", false) { autoBlock == "Packet" }
+    private val smartAutoBlock by boolean("SmartAutoBlock", false) { isPacketAutoBlock }
         .describe("Only block when it is actually useful.")
 
     // Ignore all blocking conditions, except for block rate, when standing still
@@ -286,19 +290,24 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
 
     // Rotations
     private val options = RotationSettings(this).withoutKeepRotation().withRequestPriority(RotationPriority.HIGH)
-    private val pointTracker = PointTracker().also { addValue(it) }
+    private val pointTracker = PointTracker().also {
+        addValue(it)
+        it.displayable { false }
+    }
 
     // Raycast
     private val raycastValue = boolean("RayCast", true) { options.rotationsActive }
         .describe("Require a raycast hit to confirm the target.")
-    private val raycast by raycastValue
+    // Computed (no backing delegate field): a `by raycastValue` delegate would add a second
+    // `raycast$delegate` field that Module.values picks up via reflection, showing "RayCast" twice.
+    private val raycast: Boolean get() = raycastValue.get()
     private val raycastIgnored by boolean(
         "RayCastIgnored", false
     ) { raycastValue.isActive() && options.rotationsActive }
     private val livingRaycast by boolean("LivingRayCast", true) { raycastValue.isActive() && options.rotationsActive }
         .describe("Only count living entities for the raycast.")
     private val raytraceMode by choices("Raytrace", arrayOf("Normal", "Strict"), "Normal") { raycastValue.isActive() && options.rotationsActive }
-        .describe("How strictly the raycast must land on the target.")
+        .describe("How strictly the raycast must land on the target.").displayable { false }
 
     // Hit delay
     private val useHitDelay by boolean("UseHitDelay", false)
@@ -314,9 +323,9 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
         .describe("Distance divisor used to scale clicks.")
 
     private val generateSpotBasedOnDistance by boolean("GenerateSpotBasedOnDistance", false) { options.rotationsActive }
-    private val stickyAim by boolean("StickyAim", false) { options.rotationsActive }
+    private val stickyAim by boolean("StickyAim", false) { options.rotationsActive }.displayable { false }
     private val usePointTracker by boolean("UsePointTracker", false) { options.rotationsActive }
-        .describe("Pick aim spot scaled by distance to target.")
+        .describe("Pick aim spot scaled by distance to target.").displayable { false }
 
     private val randomization = RandomizationSettings(this) { options.rotationsActive }
     private val outBorder by boolean("OutBorder", false) { options.rotationsActive }
@@ -363,9 +372,9 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
     private val predictEnemyPosition by float("PredictEnemyPosition", 1.5f, -1f..2f)
         .describe("How far ahead to predict the enemy position.")
     private val predictExitingRange by boolean("PredictExitingRange", false) { !simulateCooldown }
-        .describe("Fire an early last-hit click when you are about to move out of reach of the target.")
+        .describe("Fire an early last-hit click when you are about to move out of reach of the target.").displayable { false }
     private val exitPredictTicks by int("ExitPredictTicks", 2, 1..5) { predictExitingRange && !simulateCooldown }
-        .describe("Ticks ahead to check for leaving the target's range.")
+        .describe("Ticks ahead to check for leaving the target's range.").displayable { false }
 
     private val forceFirstHit by boolean("ForceFirstHit", false) { !respectMissCooldown && !useHitDelay }
         .describe("Force a click on the first hittable tick.")
@@ -393,11 +402,11 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
     private val renderBoxFadeSeconds by float("RenderBoxFadeSeconds", 1f, 0f..5f) { renderBoxOnSwingFail }
         .describe("How long the fail-swing box stays visible.")
     private val soundOnSwingFail by boolean("SoundOnSwingFail", false) { failSwing }
-        .describe("Play a sound when a swing misses.")
+        .describe("Play a sound when a swing misses.").displayable { false }
     private val swingFailSoundVolume by float("SwingFailSoundVolume", 0.5f, 0f..1f) { soundOnSwingFail && failSwing }
-        .describe("Volume of the miss sound.")
+        .describe("Volume of the miss sound.").displayable { false }
     private val swingFailSoundPitch by float("SwingFailSoundPitch", 1.2f, 0.5f..2f) { soundOnSwingFail && failSwing }
-        .describe("Pitch of the miss sound.")
+        .describe("Pitch of the miss sound.").displayable { false }
 
     // Inventory
     private val simulateClosingInventory by boolean("SimulateClosingInventory", false) { !noInventoryAttack }
@@ -412,7 +421,7 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
 
 
     private val displayDebug by boolean("Debug", false)
-        .describe("Show on-screen combat debug info.")
+        .describe("Show on-screen combat debug info.").displayable { false }
 
     // RenderAimPoint
     private val renderAimPointBox by boolean("RenderAimPointBox", false).subjective()
@@ -450,13 +459,12 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
     private val clickerGroup = Configurable("Clicker")
     private val rangeGroup = Configurable("Range")
     private val targetGroup = Configurable("Target")
-    private val targetFiltersGroup = Configurable("Filters")
     private val rotationsGroup = Configurable("Rotations")
-    private val aimPointGroup = Configurable("AimPoint")
     private val raycastGroup = Configurable("Raycast")
     private val autoBlockingGroup = Configurable("AutoBlocking")
     private val smartAutoBlockingGroup = Configurable("SmartAutoBlock")
     private val failSwingGroup = Configurable("FailSwing")
+    private val inventoryGroup = Configurable("Inventory")
     private val targetRenderingGroup = Configurable("TargetRendering")
     private val rangeIndicatorGroup = Configurable("RangeIndicator")
     private val circleGroup = Configurable("Circle")
@@ -464,32 +472,16 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
 
     init {
         moveValues(clickerGroup,
-            "SimulateCooldown", "SimulateDoubleClicking", "CPS", "ClickPattern", "HurtTime", "ClickOnly",
-            "GenerateClicksBasedOnDistance", "CPS-Multiplier", "DistanceFactor", "UseHitDelay",
-            "HitDelayTicks", "ForceFirstHit", "RespectMissCooldown", "PostRotationAttack")
+            "SimulateCooldown", "SimulateDoubleClicking", "CPS", "ClickPattern", "HurtTime",
+            "ActivationSlot", "PreferredSlot", "ClickOnly")
 
         moveValues(rangeGroup,
-            "Range", "ScanRange", "ThroughWallsRange", "RangeSprintReduction", "RangeChance", "FOV")
+            "Range", "ScanRange", "ThroughWallsRange", "RangeSprintReduction", "RangeChance")
 
-        moveValues(targetFiltersGroup,
-            "OnSwording", "OnScaffold", "OnDestroyBlock", "NoScaffold", "NoFly", "NoEat",
-            "NoBlocking", "BlinkCheck")
-        targetGroup.addValue(targetFiltersGroup)
         moveValues(targetGroup,
-            "TargetMode", "StickyTarget", "LimitedMultiTargets", "MaxSwitchFOV", "SwitchDelay", "Priority",
-            "ActivationSlot", "PreferredSlot")
-
-        options.nestInto(rotationsGroup)
-        randomization.nestInto(rotationsGroup)
-        rotationsGroup.addValue(pointTracker)
-        moveValues(rotationsGroup,
-            "GenerateSpotBasedOnDistance", "StickyAim", "OutBorder", "PredictClientMovement",
-            "PredictOnlyWhenOutOfRange", "PredictEnemyPosition", "PredictExitingRange", "ExitPredictTicks",
-            "UsePointTracker")
-
-        moveValues(aimPointGroup,
-            "HighestBodyPointToTarget", "LowestBodyPointToTarget", "HorizontalBodySearchRange")
-        moveValues(raycastGroup, "RayCast", "RayCastIgnored", "LivingRayCast", "Raytrace")
+            "Priority", "TargetMode", "Swing", "KeepSprint", "AutoF5", "OnScaffold", "OnDestroyBlock",
+            "StickyTarget", "LimitedMultiTargets", "MaxSwitchFOV", "SwitchDelay",
+            "OnSwording", "NoScaffold", "NoFly", "NoEat", "NoBlocking", "BlinkCheck")
 
         moveValues(smartAutoBlockingGroup,
             "SmartAutoBlock", "ForceBlockWhenStill", "CheckEnemyWeapon", "BlockRange",
@@ -500,10 +492,27 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
             "IgnoreTickRule", "BlockRate", "UpdatedNCPAutoBlock", "SwitchStartBlock",
             "InteractAutoBlock", "BlinkAutoBlock", "BlinkBlockTicks")
 
+        options.nestInto(rotationsGroup)
+        randomization.nestInto(rotationsGroup)
+        rotationsGroup.addValue(pointTracker)
+
+        moveValues(raycastGroup,
+            "RayCast", "RayCastIgnored", "LivingRayCast", "Raytrace", "UseHitDelay", "HitDelayTicks",
+            "GenerateClicksBasedOnDistance", "CPS-Multiplier", "DistanceFactor",
+            "GenerateSpotBasedOnDistance", "StickyAim", "UsePointTracker", "OutBorder",
+            "HighestBodyPointToTarget", "LowestBodyPointToTarget", "HorizontalBodySearchRange",
+            "FOV", "PredictClientMovement", "PredictOnlyWhenOutOfRange", "PredictEnemyPosition",
+            "PredictExitingRange", "ExitPredictTicks")
+
         moveValues(failSwingGroup,
-            "Swing", "FailSwing", "SwingOnlyInAir", "MaxRotationDifferenceToSwing",
-            "SwingWhenTicksLate", "TicksLateToSwing", "RenderBoxOnSwingFail", "RenderBoxColor",
-            "RenderBoxFadeSeconds", "SoundOnSwingFail", "SwingFailSoundVolume", "SwingFailSoundPitch")
+            "ForceFirstHit", "FailSwing", "RespectMissCooldown", "SwingOnlyInAir",
+            "MaxRotationDifferenceToSwing", "SwingWhenTicksLate", "TicksLateToSwing",
+            "RenderBoxOnSwingFail", "RenderBoxColor", "RenderBoxFadeSeconds",
+            "SoundOnSwingFail", "SwingFailSoundVolume", "SwingFailSoundPitch")
+
+        moveValues(inventoryGroup,
+            "SimulateClosingInventory", "NoInvAttack", "NoInvDelay", "NoConsumeAttack")
+
         moveValues(targetRenderingGroup, "RenderAimPointBox", "AimPointBoxColor", "AimPointBoxSize")
         moveValues(rangeIndicatorGroup,
             "RangeIndicator", "RangeIndicatorColor", "RangeIndicatorActiveColor", "RangeIndicatorOutline")
@@ -511,8 +520,8 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
         moveValues(markGroup, "Mark", "BlockMarkExpand")
 
         addValues(listOf(
-            clickerGroup, rangeGroup, targetGroup, rotationsGroup, aimPointGroup, raycastGroup,
-            autoBlockingGroup, failSwingGroup, targetRenderingGroup, rangeIndicatorGroup,
+            clickerGroup, rangeGroup, targetGroup, autoBlockingGroup, rotationsGroup, raycastGroup,
+            failSwingGroup, inventoryGroup, targetRenderingGroup, rangeIndicatorGroup,
             circleGroup, markGroup,
         ))
     }
@@ -632,7 +641,7 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
             return@handler
         }
 
-        if (blockStatus && autoBlock == "Packet" && releaseAutoBlock && !ignoreTickRule) {
+        if (blockStatus && isPacketAutoBlock && releaseAutoBlock && !ignoreTickRule) {
             clicks = 0
             stopBlocking()
             return@handler
@@ -1035,7 +1044,7 @@ object KillAura : Module("KillAura", Category.COMBAT, Category.SubCategory.COMBA
 
         if (shouldPrioritize()) return
 
-        if (thePlayer.isBlocking && (autoBlock == "Off" && blockStatus || autoBlock == "Packet" && releaseAutoBlock)) {
+        if (thePlayer.isBlocking && (autoBlock == "Off" && blockStatus || isPacketAutoBlock && releaseAutoBlock)) {
             stopBlocking()
 
             if (!ignoreTickRule || autoBlock == "Off") {
