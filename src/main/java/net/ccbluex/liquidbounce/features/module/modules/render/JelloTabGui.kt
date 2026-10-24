@@ -278,14 +278,10 @@ class JelloTabGui : Module() {
             val panelLeft = x + width1 + 10
             val panelRight = x + width1 + width1 + 15
 
-            if (gradientBackground.get()) {
-                // Keep it translucent so the blurred world stays visible behind the module list.
-                RenderUtil.R2DUtils.drawGradientRect(
-                    panelLeft, y, panelRight, y + positiony,
-                    Color(tR, tG, tB, 40).rgb,
-                    Color(bR, bG, bB, 40).rgb
-                )
-            } else {
+            // No tint at all while the background is blurred - any fill on top of the blur reads as a
+            // black mask over the module list. Only fall back to a light backdrop when blur is off,
+            // otherwise the text would sit directly on the world.
+            if (!blur.get()) {
                 RenderUtils.drawRect(panelLeft, y, panelRight, y + positiony, Color(20, 20, 20, 90).rgb)
             }
 
