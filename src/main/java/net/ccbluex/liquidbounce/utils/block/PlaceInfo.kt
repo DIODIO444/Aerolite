@@ -18,22 +18,13 @@ class PlaceInfo(
     companion object {
 
         /**
-         * Allows you to find a specific place info for your [blockPos]
+         * Allows you to find a specific place info for your [pos]
+         *
+         * Same as FDPClient: walk the facings in vanilla order, never place on top of the block above,
+         * and hand back the neighbouring block together with the face that points back at [pos].
          */
-        fun get(blockPos: BlockPos): PlaceInfo? {
-            return when {
-                BlockUtils.canBeClicked(blockPos.add(0, -1, 0)) ->
-                    return PlaceInfo(blockPos.add(0, -1, 0), EnumFacing.UP)
-                BlockUtils.canBeClicked(blockPos.add(0, 0, 1)) ->
-                    return PlaceInfo(blockPos.add(0, 0, 1), EnumFacing.NORTH)
-                BlockUtils.canBeClicked(blockPos.add(-1, 0, 0)) ->
-                    return PlaceInfo(blockPos.add(-1, 0, 0), EnumFacing.EAST)
-                BlockUtils.canBeClicked(blockPos.add(0, 0, -1)) ->
-                    return PlaceInfo(blockPos.add(0, 0, -1), EnumFacing.SOUTH)
-                BlockUtils.canBeClicked(blockPos.add(1, 0, 0)) ->
-                    PlaceInfo(blockPos.add(1, 0, 0), EnumFacing.WEST)
-                else -> null
-            }
-        }
+        fun get(pos: BlockPos): PlaceInfo? = EnumFacing.values().find {
+            it != EnumFacing.UP && pos.offset(it).canBeClicked()
+        }?.let { side -> PlaceInfo(pos.offset(side), side.opposite) }
     }
 }
