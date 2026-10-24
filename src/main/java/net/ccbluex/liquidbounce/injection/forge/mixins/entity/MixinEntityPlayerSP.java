@@ -323,7 +323,7 @@ public abstract class MixinEntityPlayerSP extends MixinAbstractClientPlayer {
 
         final Sprint sprint = LiquidBounce.moduleManager.getModule(Sprint.class);
 
-        boolean flag3 = !sprint.getFood() || (float) this.getFoodStats().getFoodLevel() > 6.0F || this.capabilities.allowFlying;
+        boolean flag3 = (float) this.getFoodStats().getFoodLevel() > 6.0F || this.capabilities.allowFlying;
 
         if (this.onGround && !flag1 && !flag2 && this.movementInput.moveForward >= f && !this.isSprinting() && flag3 && !this.isUsingItem() && !this.isPotionActive(Potion.blindness)) {
             if (this.sprintToggleTimer <= 0 && !this.mc.gameSettings.keyBindSprint.isKeyDown()) {
@@ -333,16 +333,23 @@ public abstract class MixinEntityPlayerSP extends MixinAbstractClientPlayer {
             }
         }
 
-        if (!this.isSprinting() && this.movementInput.moveForward >= f && flag3 && ((noSlow.getState() && sprint.getUsingItem()) || !this.isUsingItem()) && !this.isPotionActive(Potion.blindness) && this.mc.gameSettings.keyBindSprint.isKeyDown()) {
+        if (!this.isSprinting() && this.movementInput.moveForward >= f && flag3 && (noSlow.getState() || !this.isUsingItem()) && !this.isPotionActive(Potion.blindness) && this.mc.gameSettings.keyBindSprint.isKeyDown()) {
             this.setSprinting(true);
         }
 
-        final BlockFly scaffold = LiquidBounce.moduleManager.getModule(BlockFly.class);
-        if ((scaffold.getState() && !scaffold.getCanSprint()) || (sprint.getState() && sprint.getCheckServerSide() && (onGround || !sprint.getCheckServerSideGround()) && !sprint.getAllDirections() && RotationUtils.targetRotation != null && RotationUtils.getRotationDifference(new Rotation(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch)) > 30))
+        if (this.isSprinting() && (this.movementInput.moveForward < f || this.isCollidedHorizontally || !flag3)) {
             this.setSprinting(false);
+        }
 
-        if (this.isSprinting() && ((!(sprint.getState() && sprint.getAllDirections()) && this.movementInput.moveForward < f) || this.isCollidedHorizontally || !flag3))
-            this.setSprinting(false);
+        LiquidBounce.eventManager.callEvent(new PostSprintUpdateEvent());
+
+        // Feed the sprint controller the movement expressed in the server-rotation frame
+        // (modifiedInput). The direction guard has to evaluate the server-frame forward, not the
+        // raw camera input, otherwise silent rotations desync sprint on every tick.
+        sprint.correctSprintState(
+                net.ccbluex.liquidbounce.utils.rotation.RotationUtils.INSTANCE.getModifiedInput(),
+                this.isUsingItem()
+        );
 
         //aac may check it :(
         if (this.capabilities.allowFlying) {
