@@ -305,6 +305,38 @@ public abstract class MixinEntityPlayerSP extends MixinAbstractClientPlayer {
         boolean flag2 = this.movementInput.moveForward >= f;
         this.movementInput.updatePlayerMoveState();
 
+        // ---- FDPClient: rebuild the movement input in the frame of the rotation we send ----------
+        final net.ccbluex.liquidbounce.utils.rotation.RotationUtils rotationUtils =
+                net.ccbluex.liquidbounce.utils.rotation.RotationUtils.INSTANCE;
+        final net.ccbluex.liquidbounce.utils.rotation.Rotation nextgenRotation = rotationUtils.getCurrentRotation();
+
+        final MovementInput modifiedInput = new MovementInput();
+        modifiedInput.moveForward = this.movementInput.moveForward;
+        modifiedInput.moveStrafe = this.movementInput.moveStrafe;
+
+        // Reverse the sneak scaling, it is applied again after the rotation transform.
+        if (this.movementInput.sneak) {
+            modifiedInput.moveStrafe /= 0.3F;
+            modifiedInput.moveForward /= 0.3F;
+        }
+
+        if (nextgenRotation != null) {
+            final float deltaYaw = (float) Math.toRadians(this.rotationYaw - nextgenRotation.getYaw());
+            final float cos = MathHelper.cos(deltaYaw);
+            final float sin = MathHelper.sin(deltaYaw);
+
+            final float moveForward = Math.round(modifiedInput.moveForward * cos + modifiedInput.moveStrafe * sin);
+            final float moveStrafe = Math.round(modifiedInput.moveStrafe * cos - modifiedInput.moveForward * sin);
+
+            modifiedInput.moveForward = moveForward;
+            modifiedInput.moveStrafe = moveStrafe;
+        }
+
+        if (this.movementInput.sneak) {
+            modifiedInput.moveForward *= 0.3F;
+            modifiedInput.moveStrafe *= 0.3F;
+        }
+
         final NoSlow noSlow = LiquidBounce.moduleManager.getModule(NoSlow.class);
         final KillAura killAura = LiquidBounce.moduleManager.getModule(KillAura.class);
 
@@ -313,8 +345,15 @@ public abstract class MixinEntityPlayerSP extends MixinAbstractClientPlayer {
             LiquidBounce.eventManager.callEvent(slowDownEvent);
             this.movementInput.moveStrafe *= slowDownEvent.getStrafe();
             this.movementInput.moveForward *= slowDownEvent.getForward();
+            modifiedInput.moveStrafe *= slowDownEvent.getStrafe();
+            modifiedInput.moveForward *= slowDownEvent.getForward();
             this.sprintToggleTimer = 0;
         }
+
+        // Only the silent mode actually moves in the rotated frame, everything else uses the raw input.
+        final net.ccbluex.liquidbounce.utils.rotation.RotationSettings rotationSettings = rotationUtils.getActiveSettings();
+        rotationUtils.setModifiedInput(rotationSettings != null && "Silent".equals(rotationSettings.getModernMovementCorrection())
+                ? modifiedInput : this.movementInput);
 
         this.pushOutOfBlocks(this.posX - (double) this.width * 0.35D, this.getEntityBoundingBox().minY + 0.5D, this.posZ + (double) this.width * 0.35D);
         this.pushOutOfBlocks(this.posX - (double) this.width * 0.35D, this.getEntityBoundingBox().minY + 0.5D, this.posZ - (double) this.width * 0.35D);
@@ -346,10 +385,7 @@ public abstract class MixinEntityPlayerSP extends MixinAbstractClientPlayer {
         // Feed the sprint controller the movement expressed in the server-rotation frame
         // (modifiedInput). The direction guard has to evaluate the server-frame forward, not the
         // raw camera input, otherwise silent rotations desync sprint on every tick.
-        sprint.correctSprintState(
-                net.ccbluex.liquidbounce.utils.rotation.RotationUtils.INSTANCE.getModifiedInput(),
-                this.isUsingItem()
-        );
+        sprint.correctSprintState(modifiedInput, this.isUsingItem());
 
         //aac may check it :(
         if (this.capabilities.allowFlying) {
