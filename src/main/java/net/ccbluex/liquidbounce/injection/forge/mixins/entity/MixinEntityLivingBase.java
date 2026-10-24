@@ -8,6 +8,7 @@ package net.ccbluex.liquidbounce.injection.forge.mixins.entity;
 import net.ccbluex.liquidbounce.LiquidBounce;
 import net.ccbluex.liquidbounce.event.JumpEvent;
 import net.ccbluex.liquidbounce.features.module.modules.client.Animations;
+import net.ccbluex.liquidbounce.features.module.modules.client.Rotations;
 import net.ccbluex.liquidbounce.features.module.modules.combat.KillAura;
 import net.ccbluex.liquidbounce.features.module.modules.movement.Jesus;
 import net.ccbluex.liquidbounce.features.module.modules.movement.NoJumpDelay;
@@ -15,6 +16,7 @@ import net.ccbluex.liquidbounce.features.module.modules.movement.Sprint;
 import net.ccbluex.liquidbounce.features.module.modules.render.AntiBlind;
 import net.ccbluex.liquidbounce.utils.MovementUtils;
 import net.ccbluex.liquidbounce.utils.RotationUtils;
+import net.ccbluex.liquidbounce.utils.rotation.Rotation;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -32,6 +34,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
+import org.objectweb.asm.Opcodes;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.io.IOException;
@@ -166,5 +170,36 @@ public abstract class MixinEntityLivingBase extends MixinEntity {
         }
 
         return speed;
+    }
+
+    /**
+     * Feeds the current rotation into the body yaw used by {@link EntityLivingBase#onUpdate}, so the
+     * body follows the head in Realistic mode instead of only the head turning.
+     */
+    @Redirect(
+            method = "onUpdate",
+            at = @At(value = "FIELD", target = "Lnet/minecraft/entity/EntityLivingBase;rotationYaw:F", ordinal = 0, opcode = Opcodes.GETFIELD)
+    )
+    private float hookBodyRotationsA(EntityLivingBase instance) {
+        final Rotation rotation = Rotations.INSTANCE.getRotation();
+
+        return instance instanceof EntityPlayerSP && Rotations.INSTANCE.shouldUseRealisticMode() && rotation != null
+                ? rotation.getYaw()
+                : instance.rotationYaw;
+    }
+
+    /**
+     * Same as {@link #hookBodyRotationsA} but for {@link EntityLivingBase#updateDistance}.
+     */
+    @Redirect(
+            method = "updateDistance",
+            at = @At(value = "FIELD", target = "Lnet/minecraft/entity/EntityLivingBase;rotationYaw:F", opcode = Opcodes.GETFIELD)
+    )
+    private float hookBodyRotationsB(EntityLivingBase instance) {
+        final Rotation rotation = Rotations.INSTANCE.getRotation();
+
+        return instance instanceof EntityPlayerSP && Rotations.INSTANCE.shouldUseRealisticMode() && rotation != null
+                ? rotation.getYaw()
+                : instance.rotationYaw;
     }
 }

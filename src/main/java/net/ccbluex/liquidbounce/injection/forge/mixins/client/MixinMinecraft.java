@@ -184,7 +184,6 @@ public abstract class MixinMinecraft  implements IMixinMinecraft {
     private void runTick(final CallbackInfo callbackInfo) {
         StaticStorage.scaledResolution = new ScaledResolution((Minecraft)(Object) this);
 
-        LiquidBounce.eventManager.callEvent(new GameTickEvent());
         pollKeyStates();
     }
 
@@ -217,6 +216,9 @@ public abstract class MixinMinecraft  implements IMixinMinecraft {
 
     @Inject(method = "runTick", at = @At(value = "FIELD", target = "Lnet/minecraft/client/Minecraft;joinPlayerCounter:I", shift = At.Shift.BEFORE))
     private void onTick(final CallbackInfo callbackInfo) {
+        // Same ordering as FDPClient: the ported modules (KillAura, BlockFly, ...) were written
+        // against this injection point, not against the head of runTick.
+        LiquidBounce.eventManager.callEvent(new GameTickEvent());
         LiquidBounce.eventManager.callEvent(new TickEvent());
     }
 

@@ -58,6 +58,10 @@ object Rotations : Module("Rotations", Category.CLIENT, Category.SubCategory.CLI
     }.describe("Color of the server-aim direction vector.")
 
     init {
+        // Always on by default: the legacy Rotations module was non-toggleable, and with it disabled
+        // only the head followed the silent rotation while the body stayed behind.
+        state = true
+
         group("Behavior", "Realistic", "Body", "SmoothRotations", "SmoothFactor")
         group("Ghost", "Ghost", "Color")
         group(
@@ -94,9 +98,12 @@ object Rotations : Module("Rotations", Category.CLIENT, Category.SubCategory.CLI
         prevHeadPitch = headPitch
         headPitch = targetRotation.pitch
 
-        thePlayer.rotationYawHead = targetRotation.yaw
-        if (shouldRotate() && body && !realistic) {
-            thePlayer.renderYawOffset = thePlayer.rotationYawHead
+        if (shouldRotate()) {
+            thePlayer.rotationYawHead = targetRotation.yaw
+
+            if (body && !realistic) {
+                thePlayer.renderYawOffset = thePlayer.rotationYawHead
+            }
         }
     }
 
