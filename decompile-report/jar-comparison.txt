@@ -1,0 +1,91 @@
+# 重建 jar 与新 jar 对比（2026-10-28 更新版）
+
+- 新 jar：`liquidbounce-b100.jar`，18,857,011 字节，7667 个条目
+- 重建 jar：`liquidbounce-b100-rebuilt.jar`，18,856,022 字节，7666 个条目
+- 仅新 jar：['module-info.class']
+- 仅重建 jar：[]
+
+- 项目 class 总数：1041
+- 字节完全一致：1018
+- 字节不同：23
+- 资源不同：['git.properties']
+
+## 字节不同的 class 与方法差异
+
+- `net.ccbluex.liquidbounce.features.module.modules.combat.Hypixel`：4 处方法差异
+  - public final void onPacket(net.ccbluex.liquidbounce.event.PacketEvent);（6 行）
+  - public final void onVelocity(net.ccbluex.liquidbounce.event.PacketEvent, net.minecraft.client.entity.EntityPlayerSP);（10 行）
+  - public final void onTick(net.minecraft.client.entity.EntityPlayerSP);（15 行）
+  - private static final kotlin.Unit findReduceTarget$lambda$0(net.minecraft.client.entity.EntityPlayerSP, kotlin.jvm.internal.Ref$ObjectRef, net.minecraft.util.MovingObjectPosition);（6 行）
+- `net.ccbluex.liquidbounce.features.module.modules.combat.KeepSprint`：7 处方法差异
+  - public final boolean attackNewUniversal(net.minecraft.entity.Entity, boolean);（4 行）
+  - private static final kotlin.Unit onKeepSprintEvent$lambda$1(net.ccbluex.liquidbounce.event.KeepSprintEvent);（缺失）
+  - private static final kotlin.Unit onTick$lambda$2(net.ccbluex.liquidbounce.event.GameTickEvent);（缺失）
+  - private static final kotlin.Unit onJump$lambda$3(net.ccbluex.liquidbounce.event.JumpEvent);（缺失）
+  - 新增方法 private static final kotlin.Unit onKeepSprintEvent$lambda$2(net.ccbluex.liquidbounce.event.KeepSprintEvent);
+  - 新增方法 private static final kotlin.Unit onTick$lambda$3(net.ccbluex.liquidbounce.event.GameTickEvent);
+  - 新增方法 private static final kotlin.Unit onJump$lambda$4(net.ccbluex.liquidbounce.event.JumpEvent);
+- `net.ccbluex.liquidbounce.features.module.modules.combat.KillAura`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.combat.SwingFailData`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.combat.Velocity`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.movement.NoSlow`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.movement.Sprint`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.movement.Stuck`：3 处方法差异
+  - private final boolean isHypixel();（8 行）
+  - private static final kotlin.Unit onPreUpdate$lambda$0(net.ccbluex.liquidbounce.event.UpdateEvent);（8 行）
+  - private static final kotlin.Unit onPacket$lambda$2(net.ccbluex.liquidbounce.event.PacketEvent);（6 行）
+- `net.ccbluex.liquidbounce.features.module.modules.render.ItemESP`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.render.Rotations`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.world.scaffolds.Scaffold$ExtraClickInfo`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.world.scaffolds.Scaffold$delayTimer$1`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.world.scaffolds.Scaffold$findBlock$$inlined$sortedBy$1`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.world.scaffolds.Scaffold$onUpdate$1`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.features.module.modules.world.scaffolds.Scaffold`：2 处方法差异
+  - private static final kotlin.Unit onRotationUpdate$lambda$55(net.ccbluex.liquidbounce.event.RotationUpdateEvent);（52 行）
+  - public static final void access$setPlacedBlocksWithoutEagle$p(int);（58 行）
+- `net.ccbluex.liquidbounce.injection.forge.mixins.entity.MixinEntityPlayer`：2 处方法差异
+  - private double injectKeepSprintA(double);（5 行）
+  - private void injectKeepSprintB(net.minecraft.entity.player.EntityPlayer, boolean);（8 行）
+- `net.ccbluex.liquidbounce.ui.client.GuiFisProxy`：17 处方法差异
+  - public void func_73866_w_();（10 行）
+  - public void func_73863_a(int, int, float);（24 行）
+  - protected void func_73869_a(char, int);（5 行）
+  - private final void addLine(java.lang.String);（10 行）
+  - private final void saveToken(java.lang.String);（15 行）
+  - private static final java.lang.String actionPerformed$lambda$3(net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient);（缺失）
+  - private static final java.lang.String actionPerformed$lambda$5(net.ccbluex.liquidbounce.ui.client.GuiFisProxy, net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient);（缺失）
+  - private static final java.lang.String actionPerformed$lambda$6(net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient);（68 行）
+  - private static final java.lang.String actionPerformed$lambda$7(net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient);（42 行）
+  - private static final java.lang.String actionPerformed$lambda$8(net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient);（缺失）
+  - private static final java.lang.String actionPerformed$lambda$9(net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient);（缺失）
+  - private static final void submit$lambda$10(net.ccbluex.liquidbounce.ui.client.GuiFisProxy, java.lang.String, kotlin.jvm.functions.Function1, java.lang.String);（缺失）
+  - 新增方法 private static final java.lang.String actionPerformed$lambda$2(net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient);
+  - 新增方法 private static final java.lang.String actionPerformed$lambda$3(net.ccbluex.liquidbounce.ui.client.GuiFisProxy, net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient);
+  - 新增方法 private static final java.lang.String actionPerformed$lambda$4(net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient);
+  - 新增方法 private static final java.lang.String actionPerformed$lambda$5(net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient);
+  - 新增方法 private static final void submit$lambda$8(net.ccbluex.liquidbounce.ui.client.GuiFisProxy, java.lang.String, kotlin.jvm.functions.Function1, java.lang.String);
+- `net.ccbluex.liquidbounce.ui.client.GuiMainMenu`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient$Admission`：4 处方法差异
+  - public final long getSequence();（缺失）
+  - public final void setSequence(long);（缺失）
+  - 新增方法 public final long getSequence$liquidbounce();
+  - 新增方法 public final void setSequence$liquidbounce(long);
+- `net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient$Companion`：1 处方法差异
+  - private final java.lang.String normalizeContentType(java.lang.String);（43 行）
+- `net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient`：7 处方法差异
+  - public net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient(java.lang.String, java.lang.String, java.lang.String, java.lang.String, int, kotlin.jvm.internal.DefaultConstructorMarker);（12 行）
+  - private final com.google.gson.JsonObject request(java.lang.String, java.lang.String, com.google.gson.JsonObject, java.lang.String, boolean, boolean);（97 行）
+  - private final kotlin.Pair<java.lang.Integer, java.lang.String> exchange(java.lang.String, java.lang.String, java.util.Map<java.lang.String, java.lang.String>, byte[]);（10 行）
+  - private final net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient$Admission ensureAdmission();（7 行）
+  - private final net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient$Admission exchangeAdmission();（104 行）
+  - private final com.google.gson.JsonObject parseAdmission(java.lang.String);（70 行）
+  - private final java.util.Map<java.lang.String, java.lang.String> signatureHeaders(net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClient$Admission, java.lang.String, java.lang.String, byte[], java.lang.String, java.lang.String);（19 行）
+- `net.ccbluex.liquidbounce.utils.fisproxy.FisProxyClientKt`：指令完全一致（仅调试信息/常量池差异）
+- `net.ccbluex.liquidbounce.utils.fisproxy.FisProxyException`：指令完全一致（仅调试信息/常量池差异）
+
+说明：
+
+- 方法差异多来自 if/return 写法、lambda 编号、局部变量顺序与 `nop`，
+  以及 FisProxy/GuiFisProxy 两个新文件的实现结构。
+- 重建 jar 缺少 `module-info.class`：ForgeGradle reobf 无法处理，
+  Java 8 / Forge 1.8.9 不需要；`git.properties` 为构建元数据差异。

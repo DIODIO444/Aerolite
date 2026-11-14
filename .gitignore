@@ -1,0 +1,17 @@
+/run/
+/out/
+/logs/
+/build/
+/bin/
+/.settings/
+/.gradle/
+/.kotlin/
+
+# local tooling / scratch
+/.idea/
+/.workbuddy-ai/
+*.log
+/_backup/
+/_port/
+/_*.py
+/_*.txt
