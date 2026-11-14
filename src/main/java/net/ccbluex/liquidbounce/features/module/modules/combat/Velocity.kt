@@ -74,7 +74,7 @@ private val VELOCITY_MODES = arrayOf(
  * Reduces or modifies the knockback you take from attacks and explosions.
  * Supports various modes for different anti-cheat systems.
  */
-object Velocity : Module("Velocity", Category.COMBAT) {
+object Velocity : Module("AntiKnockBack", Category.COMBAT) {
 
     /**
      * OPTIONS
@@ -1530,13 +1530,13 @@ object Velocity : Module("Velocity", Category.COMBAT) {
         if (!force && fingerprint == lastProfileFingerprint) return
         lastProfileFingerprint = fingerprint
 
-        val available = AnticheatModeAdvisor.filteredModes("Velocity", antiCheat, observed, VELOCITY_MODES)
+        val available = AnticheatModeAdvisor.filteredModes("velocity", antiCheat, observed, VELOCITY_MODES)
         modeValue.updateValues(available)
         if (available.none { it.equals(mode, true) }) {
             val previous = mode
             modeValue.set(available.first())
             if (state && !previous.equals(mode, true)) {
-                LiquidBounce.hud.addNotification(Notification("Velocity compatibility",
+                LiquidBounce.hud.addNotification(Notification("AntiKnockBack compatibility",
                     "$previous unavailable here; switched to $mode.", NotifyType.WARNING, 4500))
             }
         } else if (state) {
@@ -1547,7 +1547,7 @@ object Velocity : Module("Velocity", Category.COMBAT) {
     private fun warnAboutMode(selectedMode: String) {
         val observed = ServerObserver.guessAnticheat()?.takeUnless { it.equals("Unknown", true) }
         if (antiCheat.equals("Auto", true) && observed == null) return
-        val advice = AnticheatModeAdvisor.assess("Velocity", selectedMode, antiCheat, observed)
+        val advice = AnticheatModeAdvisor.assess("velocity", selectedMode, antiCheat, observed)
         if (advice.risk == ModeRisk.RECOMMENDED) return
 
         val warningKey = "${advice.profile}|$selectedMode|${advice.risk}"
@@ -1558,7 +1558,7 @@ object Velocity : Module("Velocity", Category.COMBAT) {
             ModeRisk.LIKELY_DETECTED -> "Probable detection: $selectedMode on ${advice.profile.displayName}. Prefer ${advice.recommendedMode}."
             ModeRisk.RECOMMENDED -> return
         }
-        LiquidBounce.hud.addNotification(Notification("Velocity compatibility", message, NotifyType.WARNING, 4500))
+        LiquidBounce.hud.addNotification(Notification("AntiKnockBack compatibility", message, NotifyType.WARNING, 4500))
     }
 
     private fun effectiveSimpleFactor(base: Float): Float {

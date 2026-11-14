@@ -36,6 +36,16 @@ open class Configurable(
         value.owner = this
     }
 
+    /**
+     * Looks a value up by name, descending into [Configurable] groups.
+     * Settings nested in a group are exported as flat `Module <name> <value>` script lines, so
+     * the apply side has to be able to find them here.
+     */
+    fun findValue(valueName: String): Value<*>? {
+        values.find { it.name.equals(valueName, ignoreCase = true) }?.let { return it }
+        return values.filterIsInstance<Configurable>().firstNotNullOfOrNull { it.findValue(valueName) }
+    }
+
     fun addValues(values: Collection<Value<*>>) = apply {
         values.forEach(::addValue)
     }
@@ -66,13 +76,14 @@ open class Configurable(
         return values
     }
 
-    override fun toText(): String {
-        TODO("Not yet implemented")
-    }
+    /**
+     * A group has no single scalar form: it is exported by flattening its children instead
+     * (see `SettingsUtils.generateScript`). Returning an empty string keeps callers that ask
+     * anyway from blowing up on a `TODO()`.
+     */
+    override fun toText(): String = ""
 
-    override fun fromTextF(text: String): MutableList<Value<*>>? {
-        TODO("Not yet implemented")
-    }
+    override fun fromTextF(text: String): MutableList<Value<*>>? = null
 
     fun int(
         name: String, value: Int, range: IntRange, suffix: String? = null, isSupported: (() -> Boolean)? = null

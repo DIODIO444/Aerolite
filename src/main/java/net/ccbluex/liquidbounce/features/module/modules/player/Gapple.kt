@@ -23,7 +23,7 @@ import net.ccbluex.liquidbounce.ui.font.Fonts
 import net.ccbluex.liquidbounce.utils.render.animation.AnimationUtil
 import java.awt.Color
 
-object Gapple : Module("Gapple",Category.PLAYER) {
+object Gapple : Module("AutoGapple", Category.PLAYER) {
     private val heal by int("health", 20, 0..40)
     private val sendDelay by int("SendDelay",3,1..10)
     private val sendOnceTicks = 1;
@@ -200,7 +200,7 @@ object Gapple : Module("Gapple",Category.PLAYER) {
         }
     }
     private fun drawProgressBar(width: Float, Height: Float) {
-        val textsA3 = "Gapple"
+        val textsA3 = "AutoGapple"
         val textsWidth = Fonts.fontSemibold35.getStringWidth(textsA3)
         val textsHeight = 10F
         val lenOfProgress = 120F

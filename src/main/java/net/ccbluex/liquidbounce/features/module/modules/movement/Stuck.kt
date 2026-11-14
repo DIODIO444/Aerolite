@@ -5,198 +5,139 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.movement
 
-import net.ccbluex.liquidbounce.event.GameTickEvent
+import net.ccbluex.liquidbounce.event.EventState
 import net.ccbluex.liquidbounce.event.MovementInputEvent
 import net.ccbluex.liquidbounce.event.PacketEvent
 import net.ccbluex.liquidbounce.event.UpdateEvent
-import net.ccbluex.liquidbounce.event.WorldEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
-import net.ccbluex.liquidbounce.features.module.modules.world.scaffolds.Scaffold
-import net.ccbluex.liquidbounce.utils.client.PacketUtils.sendPacket
-import net.minecraft.init.Items
-import net.minecraft.item.ItemBow
-import net.minecraft.network.Packet
-import net.minecraft.network.play.client.C00PacketKeepAlive
+import net.ccbluex.liquidbounce.utils.client.PacketUtils
 import net.minecraft.network.play.client.C03PacketPlayer
-import net.minecraft.network.play.client.C07PacketPlayerDigging
-import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement
 import net.minecraft.network.play.server.S08PacketPlayerPosLook
-import java.util.ArrayDeque
+import net.minecraft.network.play.server.S12PacketEntityVelocity
 
 /**
- * "Stuck in air" — freezes the player in place by swallowing outgoing movement packets and
- * replaying the captured use-item packet once the position is locked.
+ * "Stuck in air" — freezes the player for [pulse] ticks, releases for one tick, and repeats.
  *
- * Ported from LyasimNextgen's `today.lyasim.module.impl.movement.Stuck`, which is written against
- * 1.20 mappings, and re-implemented on 1.8.9 packets:
- *
- * | Lyasim (1.20)                         | here (1.8.9)                              |
- * |---------------------------------------|-------------------------------------------|
- * | PlayerMoveC2SPacket                   | C03PacketPlayer                           |
- * | CommonPongC2SPacket                   | C00PacketKeepAlive                        |
- * | PlayerInteractItemC2SPacket           | C08PacketPlayerBlockPlacement             |
- * | PlayerActionC2SPacket (release item)  | C07PacketPlayerDigging RELEASE_USE_ITEM   |
- * | PlayerPositionLookS2CPacket           | S08PacketPlayerPosLook                    |
- * | ClientCommandC2SPacket (fall flying)  | dropped — elytra does not exist in 1.8.9  |
+ * While frozen the motion is zeroed every tick and the movement input is cleared. On Hypixel the
+ * plain position packet is swapped for a look packet, which the server accepts without moving the
+ * player. A knockback or a position setback releases the freeze early and schedules a short delay
+ * before the next pulse, so the client does not fight the server.
  */
 object Stuck : Module("Stuck", Category.MOVEMENT) {
 
-    private val mode by choices("Mode", arrayOf("Delay", "Packet"), "Delay")
+    private val pulse by int("Pulse", 65, 2..85)
 
-    /** 0 = idle, 1 = captured a use packet, 2 = released, 3 = finished. */
-    private var stuckState = 0
-    private var capturedPacket: Packet<*>? = null
-    private var savedYaw = 0F
-    private var savedPitch = 0F
-    private var pendingDisable = false
-    private val pongQueue = ArrayDeque<Packet<*>>()
+    var frozen = false
+        private set
+
+    private var savedX = 0.0
+    private var savedY = 0.0
+    private var savedZ = 0.0
+    private var frozenAt = 0
+    private var delay = 0
 
     override fun onEnable() {
-        stuckState = 0
-        capturedPacket = null
-        savedYaw = mc.thePlayer?.rotationYaw ?: 0F
-        savedPitch = mc.thePlayer?.rotationPitch ?: 0F
-        pendingDisable = false
-        pongQueue.clear()
+        delay = 2
     }
 
     override fun onDisable() {
-        flushPongs()
-        pongQueue.clear()
-        capturedPacket = null
-        stuckState = 0
-        pendingDisable = false
+        freeze(false)
+        delay = 0
     }
 
-    /** Packet mode: Scaffold keeps re-placing and fights the frozen position. */
-    val onTick = handler<GameTickEvent> {
-        if (mode != "Packet") return@handler
-
-        if (Scaffold.handleEvents()) {
-            Scaffold.state = false
-            return@handler
-        }
-    }
-
-    val onUpdate = handler<UpdateEvent> {
+    val onPreUpdate = handler<UpdateEvent> {
         val player = mc.thePlayer ?: return@handler
 
-        if (stuckState == 1) {
-            stuckState = 2
-
-            val currentYaw = player.rotationYaw
-            val currentPitch = player.rotationPitch
-
-            if (shouldSendCapturedPacket() && (savedYaw != currentYaw || savedPitch != currentPitch)) {
-                sendPacket(
-                    C03PacketPlayer.C05PacketPlayerLook(currentYaw, currentPitch, player.onGround),
-                    false
-                )
-                flushPongs()
-                savedYaw = currentYaw
-                savedPitch = currentPitch
+        if (delay > 0) {
+            delay--
+            if (delay == 0) {
+                freeze(true)
             }
-
-            capturedPacket?.let { sendPacket(it, false) }
-            capturedPacket = null
-        } else if (mode == "Packet" && player.ticksExisted % 10 == 0) {
-            flushPongs()
         }
 
-        if (pendingDisable) {
-            if (mode == "Delay") {
-                sendPacket(
-                    C03PacketPlayer.C04PacketPlayerPosition(
-                        player.posX + 1337.0, player.posY, player.posZ + 1337.0, player.onGround
-                    ),
-                    false
-                )
-            }
+        if (!frozen) {
+            return@handler
+        }
 
-            flushPongs()
-            stuckState = 3
-            pendingDisable = false
+        player.motionX = 0.0
+        player.motionY = 0.0
+        player.motionZ = 0.0
+
+        if (pulse > 2 && player.ticksExisted - frozenAt >= pulse) {
+            freeze(false)
+            delay = 1
         }
     }
 
-    val onMovementInput = handler<MovementInputEvent> { event ->
-        event.originalInput.moveForward = 0F
-        event.originalInput.moveStrafe = 0F
+    val onPostPlayerInput = handler<MovementInputEvent> {
+        if (frozen || delay == 1) {
+            it.originalInput.moveStrafe = 0F
+            it.originalInput.moveForward = 0F
+        }
     }
 
     val onPacket = handler<PacketEvent> { event ->
-        if (mc.thePlayer == null) return@handler
+        val player = mc.thePlayer ?: return@handler
+
+        if (event.eventType == EventState.SEND) {
+            if (!frozen) {
+                return@handler
+            }
+
+            val packet = event.packet
+            // C05 is a subclass of C03; only the plain position packets need replacing.
+            if (packet !is C03PacketPlayer || packet is C03PacketPlayer.C05PacketPlayerLook) {
+                return@handler
+            }
+
+            if (!isHypixel()) {
+                return@handler
+            }
+
+            PacketUtils.sendPacket(
+                C03PacketPlayer.C05PacketPlayerLook(player.rotationYaw, player.rotationPitch, player.onGround),
+                false
+            )
+            event.cancelEvent()
+            return@handler
+        }
 
         when (val packet = event.packet) {
-            is C03PacketPlayer -> {
-                // Freeze: no position update may reach the server.
-                event.cancelEvent()
-            }
-
-            is C00PacketKeepAlive -> {
-                pongQueue.addLast(packet)
-                event.cancelEvent()
-            }
-
-            is C08PacketPlayerBlockPlacement -> {
-                capturedPacket = packet
-                stuckState = 1
-                event.cancelEvent()
-            }
-
-            is C07PacketPlayerDigging -> {
-                if (packet.status == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM) {
-                    capturedPacket = packet
-                    stuckState = 1
-                    event.cancelEvent()
+            is S12PacketEntityVelocity -> {
+                if (packet.entityID == player.entityId && frozen) {
+                    freeze(false)
+                    delay = 4
                 }
             }
 
             is S08PacketPlayerPosLook -> {
-                if (mode == "Delay") {
-                    flushPongs()
-                    stuckState = 3
-                    state = false
+                if (frozen) {
+                    freeze(false)
+                    delay = 3
                 }
             }
         }
     }
 
-    val onWorld = handler<WorldEvent> { event ->
-        if (event.worldClient == null) return@handler
+    private fun isHypixel(): Boolean =
+        mc.currentServerData?.serverIP?.contains("hypixel", ignoreCase = true) == true
 
-        stuckState = 3
-        capturedPacket = null
-        state = false
-    }
+    fun freeze(state: Boolean) {
+        val player = mc.thePlayer ?: return
 
-    private fun flushPongs() {
-        while (pongQueue.isNotEmpty()) {
-            sendPacket(pongQueue.pollFirst(), false)
+        if (state) {
+            savedX = player.motionX
+            savedY = player.motionY
+            savedZ = player.motionZ
+            frozenAt = player.ticksExisted
+        } else {
+            player.motionX = savedX
+            player.motionY = savedY
+            player.motionZ = savedZ
         }
-    }
 
-    /** Same rule as Lyasim: never release the use packet while eating or drawing a bow. */
-    private fun shouldSendCapturedPacket(): Boolean {
-        val packet = capturedPacket ?: return false
-        val player = mc.thePlayer ?: return false
-
-        return when (packet) {
-            is C08PacketPlayerBlockPlacement -> {
-                val item = player.heldItem?.item
-                // beetroot soup does not exist in 1.8.9, so only the two stews are checked here.
-                item != null && item !is ItemBow &&
-                        item != Items.mushroom_stew &&
-                        item != Items.rabbit_stew
-            }
-
-            is C07PacketPlayerDigging ->
-                packet.status == C07PacketPlayerDigging.Action.RELEASE_USE_ITEM &&
-                        player.heldItem?.item is ItemBow
-
-            else -> false
-        }
+        frozen = state
     }
 }

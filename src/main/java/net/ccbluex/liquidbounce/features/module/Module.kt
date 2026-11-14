@@ -321,7 +321,7 @@ open class Module @JvmOverloads constructor(
     /**
      * Get value by [valueName]
      */
-    fun getValue(valueName: String) = values.find { it.name.equals(valueName, ignoreCase = true) }
+    fun getValue(valueName: String) = findValue(valueName)
 
     /**
      * Get value via `module[valueName]`

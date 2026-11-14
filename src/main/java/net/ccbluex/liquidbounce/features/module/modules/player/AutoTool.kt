@@ -12,7 +12,7 @@ import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.utils.inventory.SilentHotbar
 
-object AutoTool : Module("AutoTool", Category.PLAYER, subjective = true, gameDetecting = false) {
+object AutoTool : Module("AutoTools", Category.PLAYER, subjective = true, gameDetecting = false) {
 
     private val switchBack by boolean("SwitchBack", false)
     private val onlySneaking by boolean("OnlySneaking", false)

@@ -53,7 +53,7 @@ import org.lwjgl.opengl.GL11
 import java.awt.Color
 import kotlin.math.*
 
-object Scaffold : Module("Scaffold", Category.WORLD, Keyboard.KEY_I) {
+object Scaffold : Module("BlockFly", Category.WORLD, Keyboard.KEY_I) {
 
     /**
      * TOWER MODES & SETTINGS

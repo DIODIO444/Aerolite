@@ -173,15 +173,10 @@ object SettingsUtils {
             for (module in moduleManager) {
                 if (all || !module.subjective) {
                     if (values) {
-                        for (value in module.values) {
-                            if (all || !value.subjective && value.shouldRender()) {
-                                val valueString = "${module.name} ${value.name} ${value.toText()}"
-
-                                if (valueString.isNotBlank()) {
-                                    appendLine(valueString)
-                                }
-                            }
-                        }
+                        // Groups (Tower, ColorSettings, …) have no scalar text form, so they are
+                        // flattened into one line per leaf value. Module.getValue() resolves those
+                        // names recursively, so the generated lines can be applied again.
+                        appendValues(this, module, module.values, all)
                     }
 
                     if (states) {
@@ -194,6 +189,25 @@ object SettingsUtils {
                 }
             }
         }.trimEnd()
+    }
+
+    private fun appendValues(builder: StringBuilder, module: Module, values: List<Value<*>>, all: Boolean) {
+        for (value in values) {
+            if (value is Configurable) {
+                appendValues(builder, module, value.values, all)
+                continue
+            }
+
+            if (!all && (value.subjective || !value.shouldRender())) {
+                continue
+            }
+
+            val valueString = "${module.name} ${value.name} ${value.toText()}"
+
+            if (valueString.isNotBlank()) {
+                builder.appendLine(valueString)
+            }
+        }
     }
 
 }
