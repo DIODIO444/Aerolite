@@ -25,12 +25,21 @@ public enum BlendUtils {
    public static Color getHealthColor(float health, float maxHealth) {
       float[] fractions = new float[]{0.0F, 0.5F, 1.0F};
       Color[] colors = new Color[]{new Color(108, 0, 0), new Color(255, 51, 0), Color.GREEN};
-      float progress = health / maxHealth;
-      return blendColors(fractions, colors, progress).brighter();
+      // An entity whose max health is unknown (0) or whose health is not finite would make
+      // `health / maxHealth` infinite/NaN, which used to end up as a null colour and a NPE.
+      float progress = maxHealth > 0.0F && !Float.isNaN(health) && !Float.isInfinite(health)
+            ? Math.max(0.0F, Math.min(1.0F, health / maxHealth))
+            : 0.0F;
+      Color blended = blendColors(fractions, colors, progress);
+      return (blended != null ? blended : colors[0]).brighter();
    }
 
    public static Color blendColors(float[] fractions, Color[] colors, float progress) {
       if (fractions.length == colors.length) {
+         if (Float.isNaN(progress) || Float.isInfinite(progress)) {
+            progress = 0.0F;
+         }
+         progress = Math.max(0.0F, Math.min(1.0F, progress));
          int[] indices = getFractionIndices(fractions, progress);
          float[] range = new float[]{fractions[indices[0]], fractions[indices[1]]};
          Color[] colorRange = new Color[]{colors[indices[0]], colors[indices[1]]};
@@ -93,6 +102,7 @@ public enum BlendUtils {
       } catch (IllegalArgumentException var13) {
       }
 
-      return color3;
+      // Never hand a null colour back to the callers: they dereference the result directly.
+      return color3 != null ? color3 : color1;
    }
 }
