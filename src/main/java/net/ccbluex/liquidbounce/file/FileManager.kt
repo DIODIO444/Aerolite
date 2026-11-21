@@ -8,7 +8,6 @@ package net.ccbluex.liquidbounce.file
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import net.ccbluex.liquidbounce.LiquidBounce.CLIENT_NAME
-import net.ccbluex.liquidbounce.LiquidBounce.MINECRAFT_VERSION
 import net.ccbluex.liquidbounce.LiquidBounce.background
 import net.ccbluex.liquidbounce.LiquidBounce.isStarting
 import net.ccbluex.liquidbounce.file.configs.*
@@ -25,9 +24,8 @@ private val FILE_CONFIGS = ArrayList<FileConfig>()
 @SideOnly(Side.CLIENT)
 object FileManager : MinecraftInstance, Iterable<FileConfig> by FILE_CONFIGS {
 
-    // NOTE: pinned to the historical folder name so existing installations keep their configs
-    // after the client was rebranded from LiquidBounce to Aerolite.
-    val dir = File(mc.mcDataDir, "LiquidBounce-$MINECRAFT_VERSION")
+    // Same layout as the original Aerolite client: `<client name>-1.8`.
+    val dir = File(mc.mcDataDir, "$CLIENT_NAME-1.8")
     val fontsDir = File(dir, "fonts")
     val capesDir = File(dir, "capes")
     val settingsDir = File(dir, "settings")
